@@ -92,7 +92,7 @@ export function computePlanResults(input: PlanInput): PlanResults {
 		forecastSurplus.set(m, surplus);
 	}
 
-	// --- Investment allocation (forecast-level, per plan.md §5) -------------
+	// --- Investment allocation (forecast-level, per ADR 0001 §4) -------------
 	const forecastInvestment = new Map<Month, Money>();
 	if (input.investment) {
 		const intersection = intersectMonthRanges(

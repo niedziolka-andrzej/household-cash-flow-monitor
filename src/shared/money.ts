@@ -4,7 +4,7 @@
  * cents for EUR/USD) so all arithmetic in the engine stays exact — no floating point.
  *
  * v1 simplification: every helper here assumes 2 minor-unit digits (as PLN/EUR/USD do).
- * Zero-decimal currencies (e.g. JPY) are out of scope for now — plan.md only targets PLN.
+ * Zero-decimal currencies (e.g. JPY) are out of scope for now — only PLN is targeted (ADR 0001 §9).
  * Multi-currency plans are not supported either: validation.ts rejects mixing currencies
  * within a single plan. The value-type shape is ready for that extension without a schema
  * change; only the single-currency-per-plan rule would need to be lifted.

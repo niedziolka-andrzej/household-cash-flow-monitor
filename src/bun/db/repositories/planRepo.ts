@@ -83,7 +83,7 @@ export function deletePlanCore(db: AppDatabase, planId: number): void {
 
 /**
  * Deep-copies a plan and everything under it (assumptions, actuals, overrides) in one
- * transaction — the "branch off a what-if scenario mid-realization" case from plan.md.
+ * transaction — the "branch off a what-if scenario mid-realization" case from ADR 0001 §1.
  * Recurring-expense ids are remapped so their actuals attach to the new copies, not
  * the originals.
  */
