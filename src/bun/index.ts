@@ -4,7 +4,10 @@ import { BrowserWindow, Updater, Utils } from "electrobun/bun";
 import { createDatabase } from "./db/database";
 import { createCashflowRpc } from "./rpc/handlers";
 import { runUpdateCheck } from "./updater";
+import { applyWindowIcon } from "./windowIcon";
 
+/** Also the handle `applyWindowIcon` looks the window up by, so the two must agree. */
+const WINDOW_TITLE = "Cash Flow Monitor";
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
 
@@ -45,7 +48,7 @@ const url = await getMainViewUrl();
 // main process resizes the window to fill the available space and re-centers it (see
 // `fitWindowToScreen`). These numbers just avoid a zero-sized flash before that lands.
 mainWindow = new BrowserWindow({
-	title: "Cash Flow Monitor",
+	title: WINDOW_TITLE,
 	url,
 	rpc,
 	frame: {
@@ -57,6 +60,12 @@ mainWindow = new BrowserWindow({
 });
 
 console.log("Cash Flow Monitor: aplikacja wystartowała.");
+
+// Fire-and-forget, and Windows-only: electrobun leaves the window without an icon, so the title
+// bar and taskbar have nothing to draw until we attach one. See src/bun/windowIcon.ts.
+applyWindowIcon(WINDOW_TITLE).then((ok) => {
+	if (!ok && process.platform === "win32") console.warn("Nie ustawiono ikony okna.");
+});
 
 // Fire-and-forget: the result lands in the updater's state, and the webview picks it up
 // either from the pushed `updateStateChanged` message or by asking on mount — so it does

@@ -13,7 +13,8 @@
 		"test": "bun test",
 		"typecheck": "vue-tsc --noEmit",
 		"db:generate": "drizzle-kit generate",
-		"db:promote": "bun run scripts/promote-db.ts"
+		"db:promote": "bun run scripts/promote-db.ts",
+		"icons": "bun run scripts/generate-icons.ts"
 	},
 	"dependencies": {
 		"drizzle-orm": "^0.45.2",
