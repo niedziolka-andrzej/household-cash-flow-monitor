@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { formatMoney, type Money } from "../../shared/money";
+import { formatMoney, sameAmount, type Money } from "../../shared/money";
 import MoneyInput from "./MoneyInput.vue";
 
 /**
@@ -40,9 +40,7 @@ async function startEditing(): Promise<void> {
  * value actually changed, so merely tabbing through a cell doesn't trigger a save. */
 function onCommit(parsed: Money | null): void {
 	editing.value = false;
-	const before = props.value?.amountMinor ?? null;
-	const after = parsed?.amountMinor ?? null;
-	if (before !== after) emit("update", parsed);
+	if (!sameAmount(props.value, parsed)) emit("update", parsed);
 }
 
 function clear(): void {

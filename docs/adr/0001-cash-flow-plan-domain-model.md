@@ -1,6 +1,6 @@
 # ADR 0001 — Cash-flow plan domain model and forecast/actual engine
 
-- **Status:** Accepted
+- **Status:** Accepted, amended in part by [ADR 0002](0002-per-item-corrections-for-one-time-expenses.md)
 - **Date:** 2026-08-09
 - **Supersedes:** `plan.md` (Polish requirements note written before the first commit), removed with this record.
 
@@ -77,6 +77,10 @@ every amount nullable = "no actual, use the forecast"). Recurring expenses are t
 they get **per-item, per-month** actuals (`recurring_expense_actuals`), because that is where
 variance is both recurring and interesting enough to be worth the extra typing.
 
+> **Amended.** One-time expenses moved to per-item corrections in
+> [ADR 0002](0002-per-item-corrections-for-one-time-expenses.md); their lump-sum column pair is
+> still read as a fallback. Income and the investment contribution are unaffected.
+
 The rejected alternative was a fully normalized `ActualEntry` per (month, category, item). It is
 more flexible, but it buys flexibility this app does not use and costs joins on every read plus
 a heavier data-entry UI. The chosen shape mirrors how the user already thinks — one line per
@@ -129,7 +133,8 @@ Recorded so the omissions read as decisions rather than oversights:
 
 - **Balance safety threshold.** Only the zero crossings are flagged
   (`negativeMonthlyBalance`, `negativeCumulativeBalance`); no configurable per-plan floor.
-- **Per-item actuals for income and one-time expenses** — see decision 5.
+- **Per-item actuals for income** — see decision 5. (One-time expenses *did* get them, in
+  [ADR 0002](0002-per-item-corrections-for-one-time-expenses.md).)
 - **Amount ranges (min–max) on recurring expenses** — see decision 9.
 - **Zero-decimal currencies and multi-currency plans** — the money helpers assume two
   minor-unit digits.
@@ -150,7 +155,9 @@ testable properties, and are tested
 
 **Costs.** Aggregate monthly actuals mean variance on income and one-time expenses cannot be
 attributed to a specific item; recovering that later requires a schema migration and a busier
-data-entry UI. The hard-coded allocation cannot be swapped by a user — a second strategy means
+data-entry UI. (That is exactly what
+[ADR 0002](0002-per-item-corrections-for-one-time-expenses.md) went on to do for one-time
+expenses.) The hard-coded allocation cannot be swapped by a user — a second strategy means
 a code change and a way to select it. Single-currency plans exclude anyone budgeting across
 currencies. And because the engine always recomputes everything, there is no audit trail of
 what a plan projected at some earlier point in time; only current inputs are stored.

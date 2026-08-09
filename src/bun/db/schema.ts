@@ -86,9 +86,12 @@ export const investmentConfigs = sqliteTable(
 	],
 );
 
-/** Aggregate actuals for a month: income, one-time expenses and investment are each
- * a single lump sum (spreadsheet-style granularity) — a null pair means "no actual
- * yet, use the forecast". */
+/** Aggregate actuals for a month: income and investment are a single lump sum
+ * (spreadsheet-style granularity) — a null pair means "no actual yet, use the forecast".
+ *
+ * `one_time_expense_actual_*` is the legacy lump-sum column pair for one-time expenses,
+ * superseded by the per-item `one_time_expense_actuals` table (ADR 0002). It is still
+ * read as a fallback so pre-existing rows keep resolving, but nothing writes it. */
 export const monthlyActuals = sqliteTable(
 	"monthly_actuals",
 	{
@@ -123,6 +126,27 @@ export const recurringExpenseActuals = sqliteTable(
 		actualCurrency: text("actual_currency").notNull(),
 	},
 	(table) => [unique("recurring_expense_actuals_item_month_unique").on(table.recurringExpenseId, table.month)],
+);
+
+/**
+ * Per-one-time-expense correction: what the item actually cost. Keyed on the item alone,
+ * not on (item, month): a one-time expense has exactly one date, so its month follows from
+ * that date — moving the date carries the correction along instead of orphaning it.
+ */
+export const oneTimeExpenseActuals = sqliteTable(
+	"one_time_expense_actuals",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		planId: integer("plan_id")
+			.notNull()
+			.references(() => plans.id, { onDelete: "cascade" }),
+		oneTimeExpenseId: integer("one_time_expense_id")
+			.notNull()
+			.references(() => oneTimeExpenses.id, { onDelete: "cascade" }),
+		actualAmountMinor: integer("actual_amount_minor").notNull(),
+		actualCurrency: text("actual_currency").notNull(),
+	},
+	(table) => [unique("one_time_expense_actuals_item_unique").on(table.oneTimeExpenseId)],
 );
 
 /** Manual override of the *monthly* (not cumulative) balance — highest priority. */

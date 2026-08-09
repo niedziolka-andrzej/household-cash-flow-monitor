@@ -13,6 +13,7 @@ import {
 import type { AppDatabase } from "../db/database";
 import {
 	upsertMonthlyActualField,
+	upsertOneTimeExpenseActual,
 	upsertOverride,
 	upsertRecurringExpenseActual,
 } from "../db/repositories/actualsRepo";
@@ -211,6 +212,16 @@ export function createCashflowRpc(db: AppDatabase, getWindow: () => BrowserWindo
 						assertValid(validateMonthInPlanRange(month, plan.startMonth, plan.endMonth));
 						assertMoneyMatchesCurrency(value, plan.currency);
 						upsertRecurringExpenseActual(db, planId, recurringExpenseId, month, value);
+						return buildSnapshot(db, planId);
+					}),
+				upsertOneTimeActual: ({ planId, oneTimeExpenseId, value }) =>
+					guard(() => {
+						const plan = requirePlanCore(db, planId);
+						assertMoneyMatchesCurrency(value, plan.currency);
+						// No month to validate: the correction hangs off the item, whose date already
+						// places it. An item dated outside the plan range is simply not summed by the
+						// engine, exactly as its forecast isn't.
+						upsertOneTimeExpenseActual(db, planId, oneTimeExpenseId, value);
 						return buildSnapshot(db, planId);
 					}),
 				upsertOverride: ({ planId, month, balance }) =>

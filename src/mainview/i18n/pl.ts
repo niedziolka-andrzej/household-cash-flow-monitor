@@ -148,6 +148,8 @@ export default {
 		forecastPrefix: "prognoza:",
 		addActual: "+ Wykonanie",
 		actualDone: "✓ Wykonano",
+		actualCount: "Wykonanie: {done}/{total}",
+		deltaVsPlan: "{delta} vs plan",
 		setOverride: "Ustaw korektę",
 		overrideSet: "Korekta",
 		clearValue: "Wyczyść",
@@ -168,6 +170,18 @@ export default {
 		riskNegativeCumulative: "Saldo skumulowane spada poniżej zera",
 
 		totalInvestedInvariantHint: "Suma wpłat inwestycyjnych w zakresie celu równa się łącznemu celowi.",
+	},
+
+	oneTimeActuals: {
+		title: "Wykonanie wydatków jednorazowych",
+		subtitle: "{month} · prognoza zostaje bez zmian, wpisz kwotę faktycznie zapłaconą",
+		amountPlaceholder: "Faktycznie",
+		planPrefix: "plan",
+		clearCorrection: "Wyczyść korektę",
+		forecastTotal: "Prognoza",
+		actualTotal: "Faktycznie",
+		done: "Gotowe",
+		empty: "Brak wydatków jednorazowych w tym miesiącu.",
 	},
 
 	errors: {

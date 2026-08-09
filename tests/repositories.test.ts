@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { createDatabase, type AppDatabase } from "../src/bun/db/database";
 import {
 	createIncomeItem,
+	createOneTimeExpense,
 	createRecurringExpense,
 	deleteIncomeItem,
+	deleteOneTimeExpense,
 	getInvestmentConfig,
 	listIncomeItems,
+	listOneTimeExpenses,
 	listRecurringExpenses,
 	saveInvestmentConfig,
 	updateIncomeItem,
@@ -20,9 +23,11 @@ import {
 } from "../src/bun/db/repositories/planRepo";
 import {
 	listMonthlyActuals,
+	listOneTimeExpenseActuals,
 	listOverrides,
 	listRecurringExpenseActuals,
 	upsertMonthlyActualField,
+	upsertOneTimeExpenseActual,
 	upsertOverride,
 	upsertRecurringExpenseActual,
 } from "../src/bun/db/repositories/actualsRepo";
@@ -98,7 +103,7 @@ describe("planRepo", () => {
 		expect(listRecurringExpenseActuals(db, plan.id)).toEqual([]);
 	});
 
-	test("duplicatePlanCore deep-copies assumptions, actuals and overrides with remapped recurring ids", () => {
+	test("duplicatePlanCore deep-copies assumptions, actuals and overrides with remapped item ids", () => {
 		const source = createPlanCore(db, {
 			name: "Oryginał",
 			startMonth: "2026-01",
@@ -114,6 +119,12 @@ describe("planRepo", () => {
 			sortOrder: 0,
 		});
 		createIncomeItem(db, source.id, { name: "Wypłata", date: "2026-01-10", forecast: money(5000_00, "PLN") });
+		const bike = createOneTimeExpense(db, source.id, {
+			name: "Rower",
+			date: "2026-01-06",
+			forecast: money(5000_00, "PLN"),
+		});
+		upsertOneTimeExpenseActual(db, source.id, bike.id, { amountMinor: 5300_00, currency: "PLN" });
 		saveInvestmentConfig(db, source.id, {
 			totalTarget: money(300_00, "PLN"),
 			monthlyMinimum: money(100_00, "PLN"),
@@ -146,6 +157,17 @@ describe("planRepo", () => {
 		const copiedRecurringActuals = listRecurringExpenseActuals(db, copy.id);
 		expect(copiedRecurringActuals).toEqual([
 			{ recurringExpenseId: copiedRentId, month: "2026-01", amount: money(1400_00, "PLN") },
+		]);
+
+		const copiedOneTime = listOneTimeExpenses(db, copy.id);
+		expect(copiedOneTime).toHaveLength(1);
+		expect(copiedOneTime[0].id).not.toBe(bike.id);
+		expect(listOneTimeExpenseActuals(db, copy.id)).toEqual([
+			{ oneTimeExpenseId: copiedOneTime[0].id, amount: money(5300_00, "PLN") },
+		]);
+		// The original keeps its own correction, still pointing at its own item.
+		expect(listOneTimeExpenseActuals(db, source.id)).toEqual([
+			{ oneTimeExpenseId: bike.id, amount: money(5300_00, "PLN") },
 		]);
 
 		expect(listMonthlyActuals(db, copy.id).find((a) => a.month === "2026-01")?.income).toEqual(money(5200_00, "PLN"));
@@ -241,6 +263,78 @@ describe("actualsRepo upsert/clear semantics", () => {
 		});
 		expect(() => upsertMonthlyActualField(db, plan.id, "2026-01", "income", null)).not.toThrow();
 		expect(listMonthlyActuals(db, plan.id)).toEqual([]);
+	});
+
+	test("upsertOneTimeExpenseActual sets, updates and clears a per-item correction", () => {
+		const plan = createPlanCore(db, {
+			name: "P",
+			startMonth: "2026-01",
+			endMonth: "2026-01",
+			currency: "PLN",
+			openingBalance: money(0, "PLN"),
+		});
+		const item = createOneTimeExpense(db, plan.id, {
+			name: "Rower",
+			date: "2026-01-06",
+			forecast: money(5000_00, "PLN"),
+		});
+
+		upsertOneTimeExpenseActual(db, plan.id, item.id, { amountMinor: 5300_00, currency: "PLN" });
+		expect(listOneTimeExpenseActuals(db, plan.id)).toEqual([
+			{ oneTimeExpenseId: item.id, amount: money(5300_00, "PLN") },
+		]);
+
+		upsertOneTimeExpenseActual(db, plan.id, item.id, { amountMinor: 5100_00, currency: "PLN" });
+		expect(listOneTimeExpenseActuals(db, plan.id)).toEqual([
+			{ oneTimeExpenseId: item.id, amount: money(5100_00, "PLN") },
+		]);
+
+		upsertOneTimeExpenseActual(db, plan.id, item.id, null);
+		expect(listOneTimeExpenseActuals(db, plan.id)).toEqual([]);
+	});
+
+	test("a correction on an item from another plan is rejected", () => {
+		const planA = createPlanCore(db, {
+			name: "A",
+			startMonth: "2026-01",
+			endMonth: "2026-01",
+			currency: "PLN",
+			openingBalance: money(0, "PLN"),
+		});
+		const planB = createPlanCore(db, {
+			name: "B",
+			startMonth: "2026-01",
+			endMonth: "2026-01",
+			currency: "PLN",
+			openingBalance: money(0, "PLN"),
+		});
+		const item = createOneTimeExpense(db, planA.id, {
+			name: "Rower",
+			date: "2026-01-06",
+			forecast: money(5000_00, "PLN"),
+		});
+		expect(() => upsertOneTimeExpenseActual(db, planB.id, item.id, { amountMinor: 1_00, currency: "PLN" })).toThrow();
+	});
+
+	test("deleting the one-time expense takes its correction with it", () => {
+		const plan = createPlanCore(db, {
+			name: "P",
+			startMonth: "2026-01",
+			endMonth: "2026-01",
+			currency: "PLN",
+			openingBalance: money(0, "PLN"),
+		});
+		const item = createOneTimeExpense(db, plan.id, {
+			name: "Rower",
+			date: "2026-01-06",
+			forecast: money(5000_00, "PLN"),
+		});
+		upsertOneTimeExpenseActual(db, plan.id, item.id, { amountMinor: 5300_00, currency: "PLN" });
+
+		deleteOneTimeExpense(db, plan.id, item.id);
+
+		expect(listOneTimeExpenses(db, plan.id)).toEqual([]);
+		expect(listOneTimeExpenseActuals(db, plan.id)).toEqual([]);
 	});
 
 	test("upsertOverride sets then clears", () => {

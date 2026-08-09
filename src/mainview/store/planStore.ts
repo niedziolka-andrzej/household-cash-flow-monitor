@@ -169,6 +169,11 @@ export function upsertRecurringActual(
 	return applyMutation(() => call("upsertRecurringActual", { planId, recurringExpenseId, month, value }));
 }
 
+/** Correction for one one-time expense — the month follows from the item's date. */
+export function upsertOneTimeActual(planId: number, oneTimeExpenseId: number, value: Money | null): Promise<void> {
+	return applyMutation(() => call("upsertOneTimeActual", { planId, oneTimeExpenseId, value }));
+}
+
 export function upsertOverride(planId: number, month: string, balance: Money | null): Promise<void> {
 	return applyMutation(() => call("upsertOverride", { planId, month, balance }));
 }

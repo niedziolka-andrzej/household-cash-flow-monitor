@@ -1,13 +1,20 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { formatMoney, type Money } from "../../shared/money";
+import { formatMoney, formatSignedMoney, type Money } from "../../shared/money";
 import type { BalanceSource, MonthlyResult } from "../../shared/types";
 import ActualCell from "../components/ActualCell.vue";
 import CumulativeBalanceChart from "../components/CumulativeBalanceChart.vue";
 import IncomeExpenseChart from "../components/IncomeExpenseChart.vue";
+import OneTimeActualsModal from "../components/OneTimeActualsModal.vue";
 import Tag from "../components/Tag.vue";
-import { planStore, upsertMonthlyActual, upsertOverride, upsertRecurringActual } from "../store/planStore";
+import {
+	planStore,
+	upsertMonthlyActual,
+	upsertOneTimeActual,
+	upsertOverride,
+	upsertRecurringActual,
+} from "../store/planStore";
 
 const { t } = useI18n();
 
@@ -17,9 +24,10 @@ const currency = computed(() => plan.value.currency);
 const recurringItems = computed(() => planStore.current!.recurringExpenses);
 
 const monthFormatter = new Intl.DateTimeFormat("pl-PL", { month: "short", year: "numeric" });
-function formatMonthHeader(month: string): string {
+const longMonthFormatter = new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" });
+function formatMonth(month: string, formatter: Intl.DateTimeFormat): string {
 	const [year, m] = month.split("-").map(Number);
-	return monthFormatter.format(new Date(year, m - 1, 1));
+	return formatter.format(new Date(year, m - 1, 1));
 }
 
 /** Which rung of the override → actual → forecast hierarchy produced this month's balance. */
@@ -39,6 +47,30 @@ function overrideFor(month: string) {
 	return planStore.current!.overrides.find((o) => o.month === month) ?? null;
 }
 
+// --- one-time expenses: per-item corrections, edited in a dialog per month ---------
+
+/** Month whose one-time-expense dialog is open; null = closed. */
+const openOneTimeMonth = ref<string | null>(null);
+const openOneTimeResult = computed(() => months.value.find((m) => m.month === openOneTimeMonth.value) ?? null);
+
+function correctionCount(monthResult: MonthlyResult): number {
+	return monthResult.oneTimeRows.filter((r) => r.actual !== null).length;
+}
+/** True once the month's figure comes from anything other than the plan — a per-item
+ * correction, or a legacy lump sum entered before corrections existed (ADR 0002). */
+function oneTimeHasActual(monthResult: MonthlyResult): boolean {
+	return correctionCount(monthResult) > 0 || aggregateActual(monthResult.month)?.oneTimeExpense != null;
+}
+function oneTimePillLabel(monthResult: MonthlyResult): string {
+	const done = correctionCount(monthResult);
+	if (done === 0) return t("table.addActual");
+	return t("table.actualCount", { done, total: monthResult.oneTimeRows.length });
+}
+/** "+300,00 zł vs plan" — signed, because overspending and underspending read differently. */
+function oneTimeDeltaLabel(monthResult: MonthlyResult): string {
+	return t("table.deltaVsPlan", { delta: formatSignedMoney(monthResult.oneTimeTotal.variance, "pl-PL") });
+}
+
 /** Colored ink for signed figures; plain ink where the sign carries no meaning. */
 function toneClass(value: Money, signed: boolean): string {
 	if (!signed) return "text-ink";
@@ -50,14 +82,14 @@ function toneClass(value: Money, signed: boolean): string {
 function onIncomeActual(month: string, value: Money | null): void {
 	upsertMonthlyActual(plan.value.id, month, "income", value);
 }
-function onOneTimeActual(month: string, value: Money | null): void {
-	upsertMonthlyActual(plan.value.id, month, "oneTimeExpense", value);
-}
 function onInvestmentActual(month: string, value: Money | null): void {
 	upsertMonthlyActual(plan.value.id, month, "investment", value);
 }
 function onRecurringActual(recurringId: number, month: string, value: Money | null): void {
 	upsertRecurringActual(plan.value.id, recurringId, month, value);
+}
+function onOneTimeActual(oneTimeExpenseId: number, value: Money | null): void {
+	upsertOneTimeActual(plan.value.id, oneTimeExpenseId, value);
 }
 function onOverride(month: string, value: Money | null): void {
 	upsertOverride(plan.value.id, month, value);
@@ -117,7 +149,7 @@ const DATA_CELL = "min-w-[150px] border-b border-hairline px-3 py-2.5 align-top 
 							class="min-w-[150px] border-b border-hairline bg-surface px-3 py-3.5 text-right font-display text-sm font-bold"
 							:class="m.flags.negativeCumulativeBalance ? 'text-danger' : 'text-ink'"
 						>
-							{{ formatMonthHeader(m.month) }}
+							{{ formatMonth(m.month, monthFormatter) }}
 						</th>
 					</tr>
 				</thead>
@@ -163,17 +195,37 @@ const DATA_CELL = "min-w-[150px] border-b border-hairline px-3 py-2.5 align-top 
 							{{ formatMoney(m.recurringTotal.effective, "pl-PL") }}
 						</td>
 					</tr>
+					<!-- One-time expenses are corrected per item, in a dialog — the cell only reports
+					     the month's total and how many of its items have been settled. -->
 					<tr>
 						<th :class="[ROW_HEADER, 'bg-surface font-normal text-ink']">{{ t("table.oneTimeTotal") }}</th>
 						<td v-for="m in months" :key="m.month" :class="DATA_CELL">
-							<ActualCell
-								:value="aggregateActual(m.month)?.oneTimeExpense ?? null"
-								:fallback="m.oneTimeTotal.forecast"
-								:currency="currency"
-								:add-label="t('table.addActual')"
-								:set-label="t('table.actualDone')"
-								@update="onOneTimeActual(m.month, $event)"
-							/>
+							<div class="flex flex-col items-end gap-1.5">
+								<span class="tabular-nums text-ink">{{ formatMoney(m.oneTimeTotal.effective, "pl-PL") }}</span>
+								<span v-if="oneTimeHasActual(m)" class="text-[10px] tabular-nums text-ink-faint line-through">
+									{{ formatMoney(m.oneTimeTotal.forecast, "pl-PL") }}
+								</span>
+								<span
+									v-if="oneTimeHasActual(m) && m.oneTimeTotal.variance.amountMinor !== 0"
+									class="text-[11px] font-bold tabular-nums"
+									:class="m.oneTimeTotal.variance.amountMinor > 0 ? 'text-danger' : 'text-accent'"
+								>
+									{{ oneTimeDeltaLabel(m) }}
+								</span>
+								<button
+									v-if="m.oneTimeRows.length > 0"
+									type="button"
+									class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+									:class="
+										correctionCount(m) > 0
+											? 'bg-accent-soft text-accent'
+											: 'bg-neutralSoft text-ink-muted hover:bg-accent-soft hover:text-accent'
+									"
+									@click="openOneTimeMonth = m.month"
+								>
+									{{ oneTimePillLabel(m) }}
+								</button>
+							</div>
 						</td>
 					</tr>
 					<tr>
@@ -278,5 +330,14 @@ const DATA_CELL = "min-w-[150px] border-b border-hairline px-3 py-2.5 align-top 
 		</div>
 
 		<p class="text-xs text-ink-faint">{{ t("table.totalInvestedInvariantHint") }}</p>
+
+		<OneTimeActualsModal
+			:open="openOneTimeResult !== null"
+			:month-label="openOneTimeMonth ? formatMonth(openOneTimeMonth, longMonthFormatter) : ''"
+			:rows="openOneTimeResult?.oneTimeRows ?? []"
+			:currency="currency"
+			@close="openOneTimeMonth = null"
+			@update="onOneTimeActual"
+		/>
 	</div>
 </template>

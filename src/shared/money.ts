@@ -74,6 +74,13 @@ export function compareMoney(a: Money, b: Money): -1 | 0 | 1 {
 	return 0;
 }
 
+/** Null-safe amount comparison for "did the user's edit actually change anything" checks
+ * (e.g. before emitting an update on blur). Currency is not compared: both sides are always
+ * denominated in the same plan currency at these call sites. */
+export function sameAmount(a: Money | null, b: Money | null): boolean {
+	return (a?.amountMinor ?? null) === (b?.amountMinor ?? null);
+}
+
 /** Sums a list of Money, all of which must share `currency`. Empty list -> zero. */
 export function sumMoney(currency: string, items: readonly Money[]): Money {
 	let total = 0;
@@ -123,6 +130,12 @@ export function formatMoney(m: Money, locale: string): string {
 		style: "currency",
 		currency: m.currency,
 	}).format(m.amountMinor / 100);
+}
+
+/** `formatMoney`, prefixed with an explicit "+" on positive amounts — for variances, where
+ * overspending and underspending need to read differently at a glance. */
+export function formatSignedMoney(m: Money, locale: string): string {
+	return (m.amountMinor > 0 ? "+" : "") + formatMoney(m, locale);
 }
 
 /**

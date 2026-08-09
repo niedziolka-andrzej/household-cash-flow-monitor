@@ -61,7 +61,12 @@ export type CashflowRPC = {
 				response: PlanSnapshot;
 			};
 
-			/** `value: null` clears that field back to "use the forecast". */
+			/**
+			 * `value: null` clears that field back to "use the forecast".
+			 *
+			 * `oneTimeExpense` is the legacy lump-sum field, superseded by `upsertOneTimeActual`
+			 * (ADR 0002) — the engine still reads it as a fallback, but the UI no longer writes it.
+			 */
 			upsertMonthlyActual: {
 				params: {
 					planId: number;
@@ -73,6 +78,14 @@ export type CashflowRPC = {
 			};
 			upsertRecurringActual: {
 				params: { planId: number; recurringExpenseId: number; month: string; value: Money | null };
+				response: PlanSnapshot;
+			};
+			/**
+			 * Correction for one one-time expense: what it actually cost. No month parameter —
+			 * the item's own date decides the month. `value: null` clears the correction.
+			 */
+			upsertOneTimeActual: {
+				params: { planId: number; oneTimeExpenseId: number; value: Money | null };
 				response: PlanSnapshot;
 			};
 			/** `balance: null` clears the manual override for that month. */

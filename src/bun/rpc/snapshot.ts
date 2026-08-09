@@ -1,7 +1,12 @@
 import { computePlanResults } from "../../shared/engine/engine";
 import type { PlanInput, PlanSnapshot, PlanSummary } from "../../shared/types";
 import type { AppDatabase } from "../db/database";
-import { listMonthlyActuals, listOverrides, listRecurringExpenseActuals } from "../db/repositories/actualsRepo";
+import {
+	listMonthlyActuals,
+	listOneTimeExpenseActuals,
+	listOverrides,
+	listRecurringExpenseActuals,
+} from "../db/repositories/actualsRepo";
 import {
 	getInvestmentConfig,
 	listIncomeItems,
@@ -24,6 +29,7 @@ export function loadPlanInput(db: AppDatabase, planId: number): PlanInput {
 		investment: getInvestmentConfig(db, planId),
 		monthlyActuals: listMonthlyActuals(db, planId),
 		recurringExpenseActuals: listRecurringExpenseActuals(db, planId),
+		oneTimeExpenseActuals: listOneTimeExpenseActuals(db, planId),
 		overrides: listOverrides(db, planId),
 	};
 }
@@ -44,6 +50,7 @@ export function buildSnapshot(db: AppDatabase, planId: number): PlanSnapshot {
 		investmentConfig: input.investment,
 		monthlyActuals: input.monthlyActuals,
 		recurringExpenseActuals: input.recurringExpenseActuals,
+		oneTimeExpenseActuals: input.oneTimeExpenseActuals,
 		overrides: input.overrides,
 		results: computePlanResults(input),
 	};

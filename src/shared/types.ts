@@ -55,9 +55,12 @@ export interface InvestmentConfig {
 }
 export type InvestmentConfigInput = InvestmentConfig;
 
-/** Aggregate actuals for one month: income, one-time expenses and investment are
- * each tracked as a single lump sum per month (decision: spreadsheet-style granularity).
- * A null field means "no actual entered yet — use the forecast". */
+/** Aggregate actuals for one month: income and investment are each tracked as a single
+ * lump sum per month (decision: spreadsheet-style granularity). A null field means
+ * "no actual entered yet — use the forecast".
+ *
+ * `oneTimeExpense` is the legacy lump sum, superseded by per-item corrections
+ * (`OneTimeExpenseActual`, ADR 0002); it is still read as a fallback but never written. */
 export interface MonthlyActualAggregate {
 	month: Month;
 	income: Money | null;
@@ -69,6 +72,13 @@ export interface MonthlyActualAggregate {
 export interface RecurringExpenseActual {
 	recurringExpenseId: number;
 	month: Month;
+	amount: Money;
+}
+
+/** Correction for a single one-time expense: what it actually cost. No month of its own —
+ * the item's date decides which month it lands in. */
+export interface OneTimeExpenseActual {
+	oneTimeExpenseId: number;
 	amount: Money;
 }
 
@@ -93,6 +103,7 @@ export interface PlanInput {
 	investment: InvestmentConfig | null;
 	monthlyActuals: MonthlyActualAggregate[];
 	recurringExpenseActuals: RecurringExpenseActual[];
+	oneTimeExpenseActuals: OneTimeExpenseActual[];
 	overrides: MonthlyOverride[];
 }
 
@@ -111,6 +122,17 @@ export interface RecurringExpenseRow {
 	effective: Money;
 }
 
+/** One one-time expense as it falls in its month, with its correction if one was entered.
+ * `actual` is the correction; `effective` is the correction where present, else the forecast. */
+export interface OneTimeExpenseRow {
+	id: number;
+	name: string;
+	date: string; // 'YYYY-MM-DD'
+	forecast: Money;
+	actual: Money | null;
+	effective: Money;
+}
+
 export type BalanceSource = "override" | "actual" | "forecast";
 
 export interface MonthlyResult {
@@ -118,6 +140,9 @@ export interface MonthlyResult {
 	income: Triple;
 	recurringRows: RecurringExpenseRow[];
 	recurringTotal: Triple;
+	/** Every one-time expense dated in this month, in date order — the rows the
+	 * "wykonanie wydatków jednorazowych" dialog edits. */
+	oneTimeRows: OneTimeExpenseRow[];
 	oneTimeTotal: Triple;
 	expensesTotal: Triple;
 	/** Surplus before investment: income - expenses. */
@@ -153,6 +178,7 @@ export interface PlanSnapshot {
 	investmentConfig: InvestmentConfig | null;
 	monthlyActuals: MonthlyActualAggregate[];
 	recurringExpenseActuals: RecurringExpenseActual[];
+	oneTimeExpenseActuals: OneTimeExpenseActual[];
 	overrides: MonthlyOverride[];
 	results: PlanResults;
 }

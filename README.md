@@ -13,7 +13,7 @@ Desktop app for planning personal cash flow, comparing **forecast** against **ac
 ## What it is not
 
 - **Not a portfolio tracker.** The investment goal is a savings target: how much cash to set aside each month. There are no holdings, no asset prices, no returns or valuations.
-- **Not a single-expense tracker.** Actuals are entered at spreadsheet granularity — one lump sum per month for income, one-time expenses and investment (recurring expenses are the exception: those are per item). Individual transactions, receipts and categories are out of scope.
+- **Not a single-expense tracker.** Actuals are entered at spreadsheet granularity — one lump sum per month for income and investment. Recurring and one-time expenses are the exception: those are corrected per item, because that is where variance is worth attributing. Individual transactions, receipts and categories are out of scope.
 - **Not an accounting or budgeting-envelope tool.** No double-entry ledger, no accounts to reconcile, no envelopes or per-category limits. Just forecast vs. actual on the monthly cash flow.
 - **Not connected to your bank.** Nothing is imported or synced; every number is typed in by hand.
 

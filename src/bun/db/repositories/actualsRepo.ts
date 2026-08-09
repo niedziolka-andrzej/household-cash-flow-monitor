@@ -1,8 +1,14 @@
 import { and, eq } from "drizzle-orm";
+import { DomainError } from "../../../shared/errors";
 import { money } from "../../../shared/money";
-import type { MonthlyActualAggregate, MonthlyOverride, RecurringExpenseActual } from "../../../shared/types";
+import type {
+	MonthlyActualAggregate,
+	MonthlyOverride,
+	OneTimeExpenseActual,
+	RecurringExpenseActual,
+} from "../../../shared/types";
 import type { AppDatabase } from "../database";
-import { monthlyActuals, monthlyOverrides, recurringExpenseActuals } from "../schema";
+import { monthlyActuals, monthlyOverrides, oneTimeExpenseActuals, oneTimeExpenses, recurringExpenseActuals } from "../schema";
 
 // --- monthly aggregate actuals (income / one-time expenses / investment) ---
 
@@ -129,6 +135,72 @@ export function upsertRecurringExpenseActual(
 				planId,
 				recurringExpenseId,
 				month,
+				actualAmountMinor: value.amountMinor,
+				actualCurrency: value.currency,
+			})
+			.run();
+	}
+}
+
+// --- per-one-time-expense corrections ----------------------------------------
+
+type OneTimeActualRow = typeof oneTimeExpenseActuals.$inferSelect;
+function rowToOneTimeActual(row: OneTimeActualRow): OneTimeExpenseActual {
+	return {
+		oneTimeExpenseId: row.oneTimeExpenseId,
+		amount: money(row.actualAmountMinor, row.actualCurrency),
+	};
+}
+
+export function listOneTimeExpenseActuals(db: AppDatabase, planId: number): OneTimeExpenseActual[] {
+	return db
+		.select()
+		.from(oneTimeExpenseActuals)
+		.where(eq(oneTimeExpenseActuals.planId, planId))
+		.all()
+		.map(rowToOneTimeActual);
+}
+
+/**
+ * `value: null` deletes the correction, reverting the item to its forecast.
+ *
+ * The item is looked up by (id, planId) first: the correction's own `plan_id` has to agree
+ * with the item's, and a foreign key on the item alone would not catch a mismatched planId.
+ */
+export function upsertOneTimeExpenseActual(
+	db: AppDatabase,
+	planId: number,
+	oneTimeExpenseId: number,
+	value: { amountMinor: number; currency: string } | null,
+): void {
+	const item = db
+		.select()
+		.from(oneTimeExpenses)
+		.where(and(eq(oneTimeExpenses.id, oneTimeExpenseId), eq(oneTimeExpenses.planId, planId)))
+		.get();
+	if (!item) throw new DomainError("item.notFound");
+
+	if (value === null) {
+		db.delete(oneTimeExpenseActuals).where(eq(oneTimeExpenseActuals.oneTimeExpenseId, oneTimeExpenseId)).run();
+		return;
+	}
+
+	const existing = db
+		.select()
+		.from(oneTimeExpenseActuals)
+		.where(eq(oneTimeExpenseActuals.oneTimeExpenseId, oneTimeExpenseId))
+		.get();
+
+	if (existing) {
+		db.update(oneTimeExpenseActuals)
+			.set({ actualAmountMinor: value.amountMinor, actualCurrency: value.currency })
+			.where(eq(oneTimeExpenseActuals.id, existing.id))
+			.run();
+	} else {
+		db.insert(oneTimeExpenseActuals)
+			.values({
+				planId,
+				oneTimeExpenseId,
 				actualAmountMinor: value.amountMinor,
 				actualCurrency: value.currency,
 			})

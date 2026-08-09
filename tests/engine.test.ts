@@ -7,6 +7,7 @@ import type {
 	MonthlyActualAggregate,
 	MonthlyOverride,
 	OneTimeExpense,
+	OneTimeExpenseActual,
 	PlanInput,
 	RecurringExpense,
 	RecurringExpenseActual,
@@ -27,6 +28,7 @@ function basePlan(overrides: Partial<PlanInput> = {}): PlanInput {
 		investment: null,
 		monthlyActuals: [],
 		recurringExpenseActuals: [],
+		oneTimeExpenseActuals: [],
 		overrides: [],
 		...overrides,
 	};
@@ -46,6 +48,9 @@ function recurring(
 }
 function oneTime(id: number, date: string, amountMinor: number): OneTimeExpense {
 	return { id, planId: 1, name: `one-time-${id}`, date, forecast: pln(amountMinor) };
+}
+function oneTimeCorrection(oneTimeExpenseId: number, amountMinor: number): OneTimeExpenseActual {
+	return { oneTimeExpenseId, amount: pln(amountMinor) };
 }
 
 function findMonth(results: ReturnType<typeof computePlanResults>, month: string) {
@@ -123,6 +128,105 @@ describe("computePlanResults — effective value resolution", () => {
 		expect(rent.effective).toEqual(pln(1400_00));
 		expect(food.effective).toEqual(pln(800_00)); // untouched -> forecast
 		expect(aug.recurringTotal.effective).toEqual(pln(2200_00));
+	});
+});
+
+describe("computePlanResults — one-time expense corrections", () => {
+	function augustPlan(overrides: Partial<PlanInput> = {}): PlanInput {
+		return basePlan({
+			startMonth: "2026-08",
+			endMonth: "2026-08",
+			oneTime: [oneTime(1, "2026-08-06", 5000_00), oneTime(2, "2026-08-15", 1500_00)],
+			...overrides,
+		});
+	}
+
+	test("rows carry every item dated in the month, with its correction where one exists", () => {
+		const aug = findMonth(
+			computePlanResults(augustPlan({ oneTimeExpenseActuals: [oneTimeCorrection(1, 5300_00)] })),
+			"2026-08",
+		);
+		expect(aug.oneTimeRows.map((r) => r.id)).toEqual([1, 2]);
+		expect(aug.oneTimeRows[0].actual).toEqual(pln(5300_00));
+		expect(aug.oneTimeRows[0].effective).toEqual(pln(5300_00));
+		expect(aug.oneTimeRows[1].actual).toBeNull();
+		expect(aug.oneTimeRows[1].effective).toEqual(pln(1500_00)); // uncorrected -> forecast
+	});
+
+	test("one correction makes the month's total corrected-plus-forecast, and marks it as actual", () => {
+		const aug = findMonth(
+			computePlanResults(augustPlan({ oneTimeExpenseActuals: [oneTimeCorrection(1, 5300_00)] })),
+			"2026-08",
+		);
+		expect(aug.oneTimeTotal.forecast).toEqual(pln(6500_00));
+		expect(aug.oneTimeTotal.effective).toEqual(pln(6800_00)); // 5300 corrected + 1500 still planned
+		expect(aug.oneTimeTotal.variance).toEqual(pln(300_00));
+		expect(aug.hasAnyActual).toBe(true);
+		expect(aug.balanceSource).toBe("actual");
+	});
+
+	test("no corrections leaves the month on its forecast and unflagged", () => {
+		const aug = findMonth(computePlanResults(augustPlan()), "2026-08");
+		expect(aug.oneTimeTotal.effective).toEqual(aug.oneTimeTotal.forecast);
+		expect(aug.oneTimeRows.every((r) => r.actual === null)).toBe(true);
+		expect(aug.hasAnyActual).toBe(false);
+		expect(aug.balanceSource).toBe("forecast");
+	});
+
+	test("per-item corrections take precedence over the legacy monthly lump sum", () => {
+		const legacyOnly = findMonth(
+			computePlanResults(
+				augustPlan({ monthlyActuals: [{ month: "2026-08", income: null, oneTimeExpense: pln(9000_00), investment: null }] }),
+			),
+			"2026-08",
+		);
+		expect(legacyOnly.oneTimeTotal.effective).toEqual(pln(9000_00)); // still honoured on its own
+
+		const bothPresent = findMonth(
+			computePlanResults(
+				augustPlan({
+					monthlyActuals: [{ month: "2026-08", income: null, oneTimeExpense: pln(9000_00), investment: null }],
+					oneTimeExpenseActuals: [oneTimeCorrection(1, 5300_00)],
+				}),
+			),
+			"2026-08",
+		);
+		expect(bothPresent.oneTimeTotal.effective).toEqual(pln(6800_00));
+	});
+
+	test("a correction on an item outside the plan range changes nothing", () => {
+		const input = basePlan({
+			startMonth: "2026-08",
+			endMonth: "2026-08",
+			oneTime: [oneTime(1, "2026-08-06", 5000_00), oneTime(9, "2026-07-01", 400_00)],
+			oneTimeExpenseActuals: [oneTimeCorrection(9, 999_00)],
+		});
+		const aug = findMonth(computePlanResults(input), "2026-08");
+		expect(aug.oneTimeRows.map((r) => r.id)).toEqual([1]);
+		expect(aug.oneTimeTotal.effective).toEqual(pln(5000_00));
+		expect(aug.hasAnyActual).toBe(false);
+	});
+
+	test("a correction in an early month cascades into every later cumulative balance", () => {
+		const input = basePlan({
+			startMonth: "2026-08",
+			endMonth: "2026-10",
+			incomes: [income(1, "2026-08-01", 8000_00)],
+			oneTime: [oneTime(1, "2026-08-06", 5000_00)],
+		});
+		const before = computePlanResults(input);
+		const after = computePlanResults({ ...input, oneTimeExpenseActuals: [oneTimeCorrection(1, 5800_00)] });
+
+		// Paying 800 more than planned pushes every later cumulative balance down by 800.
+		for (const month of ["2026-08", "2026-09", "2026-10"]) {
+			expect(findMonth(after, month).cumulativeBalance.effective.amountMinor).toBe(
+				findMonth(before, month).cumulativeBalance.effective.amountMinor - 800_00,
+			);
+			// The forecast line is the reference the variance is measured against — never mutated.
+			expect(findMonth(after, month).cumulativeBalance.forecast).toEqual(
+				findMonth(before, month).cumulativeBalance.forecast,
+			);
+		}
 	});
 });
 

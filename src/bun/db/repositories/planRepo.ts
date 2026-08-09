@@ -8,6 +8,7 @@ import {
 	investmentConfigs,
 	monthlyActuals,
 	monthlyOverrides,
+	oneTimeExpenseActuals,
 	oneTimeExpenses,
 	plans,
 	recurringExpenseActuals,
@@ -84,8 +85,8 @@ export function deletePlanCore(db: AppDatabase, planId: number): void {
 /**
  * Deep-copies a plan and everything under it (assumptions, actuals, overrides) in one
  * transaction — the "branch off a what-if scenario mid-realization" case from ADR 0001 §1.
- * Recurring-expense ids are remapped so their actuals attach to the new copies, not
- * the originals.
+ * Recurring-expense and one-time-expense ids are remapped so their actuals attach to the
+ * new copies, not the originals.
  */
 export function duplicatePlanCore(db: AppDatabase, sourcePlanId: number, newName: string): PlanCore {
 	return db.transaction((tx) => {
@@ -117,8 +118,10 @@ export function duplicatePlanCore(db: AppDatabase, sourcePlanId: number, newName
 				})
 				.run();
 		}
+		const oneTimeIdMap = new Map<number, number>();
 		for (const item of tx.select().from(oneTimeExpenses).where(eq(oneTimeExpenses.planId, sourcePlanId)).all()) {
-			tx.insert(oneTimeExpenses)
+			const newOneTime = tx
+				.insert(oneTimeExpenses)
 				.values({
 					planId: newPlanId,
 					name: item.name,
@@ -126,7 +129,9 @@ export function duplicatePlanCore(db: AppDatabase, sourcePlanId: number, newName
 					forecastAmountMinor: item.forecastAmountMinor,
 					forecastCurrency: item.forecastCurrency,
 				})
-				.run();
+				.returning()
+				.get();
+			oneTimeIdMap.set(item.id, newOneTime.id);
 		}
 
 		const recurringIdMap = new Map<number, number>();
@@ -193,6 +198,23 @@ export function duplicatePlanCore(db: AppDatabase, sourcePlanId: number, newName
 					planId: newPlanId,
 					recurringExpenseId: newRecurringId,
 					month: actual.month,
+					actualAmountMinor: actual.actualAmountMinor,
+					actualCurrency: actual.actualCurrency,
+				})
+				.run();
+		}
+
+		for (const actual of tx
+			.select()
+			.from(oneTimeExpenseActuals)
+			.where(eq(oneTimeExpenseActuals.planId, sourcePlanId))
+			.all()) {
+			const newOneTimeId = oneTimeIdMap.get(actual.oneTimeExpenseId);
+			if (newOneTimeId === undefined) continue; // defensive: source item vanished mid-copy
+			tx.insert(oneTimeExpenseActuals)
+				.values({
+					planId: newPlanId,
+					oneTimeExpenseId: newOneTimeId,
 					actualAmountMinor: actual.actualAmountMinor,
 					actualCurrency: actual.actualCurrency,
 				})

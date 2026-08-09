@@ -10,9 +10,10 @@ import type { Database } from "bun:sqlite";
 // and committed under `drizzle/`; only the *application* mechanism is custom. Adding a
 // migration later means: generate it, then add one import + one array entry below.
 import migration0000 from "../../../drizzle/0000_stale_eternity.sql" with { type: "text" };
+import migration0001 from "../../../drizzle/0001_old_hellion.sql" with { type: "text" };
 
 /** Index + 1 = schema version, tracked via `PRAGMA user_version`. */
-const MIGRATIONS: readonly string[] = [migration0000];
+const MIGRATIONS: readonly string[] = [migration0000, migration0001];
 
 /** The `user_version` a database is at once this build has migrated it. Tooling that
  * moves database files between channels compares against this to refuse a transfer

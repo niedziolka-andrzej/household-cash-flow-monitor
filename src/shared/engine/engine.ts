@@ -10,6 +10,8 @@ import { intersectMonthRanges, isMonthAfter, isMonthBefore, type Month, monthOfD
 import type {
 	BalanceSource,
 	MonthlyResult,
+	OneTimeExpense,
+	OneTimeExpenseRow,
 	PlanInput,
 	PlanResults,
 	RecurringExpense,
@@ -22,7 +24,7 @@ function triple(forecast: Money, effective: Money): Triple {
 	return { forecast, effective, variance: subtractMoney(effective, forecast) };
 }
 
-function pushInto(map: Map<Month, Money[]>, key: Month, value: Money): void {
+function pushInto<T>(map: Map<Month, T[]>, key: Month, value: T): void {
 	const existing = map.get(key);
 	if (existing) existing.push(value);
 	else map.set(key, [value]);
@@ -53,10 +55,10 @@ export function computePlanResults(input: PlanInput): PlanResults {
 		const m = monthOfDate(item.date);
 		if (monthSet.has(m)) pushInto(incomeByMonth, m, item.forecast);
 	}
-	const oneTimeByMonth = new Map<Month, Money[]>();
+	const oneTimeByMonth = new Map<Month, OneTimeExpense[]>();
 	for (const item of input.oneTime) {
 		const m = monthOfDate(item.date);
-		if (monthSet.has(m)) pushInto(oneTimeByMonth, m, item.forecast);
+		if (monthSet.has(m)) pushInto(oneTimeByMonth, m, item);
 	}
 
 	const actualByMonth = new Map(input.monthlyActuals.map((a) => [a.month, a]));
@@ -64,6 +66,7 @@ export function computePlanResults(input: PlanInput): PlanResults {
 	const recurringActualByKey = new Map(
 		input.recurringExpenseActuals.map((a) => [`${a.recurringExpenseId}:${a.month}`, a.amount]),
 	);
+	const oneTimeActualById = new Map(input.oneTimeExpenseActuals.map((a) => [a.oneTimeExpenseId, a.amount]));
 
 	// --- Forecast layer -----------------------------------------------------
 	const forecastIncome = new Map<Month, Money>();
@@ -75,7 +78,10 @@ export function computePlanResults(input: PlanInput): PlanResults {
 
 	for (const m of months) {
 		const income = sumMoney(currency, incomeByMonth.get(m) ?? []);
-		const oneTime = sumMoney(currency, oneTimeByMonth.get(m) ?? []);
+		const oneTime = sumMoney(
+			currency,
+			(oneTimeByMonth.get(m) ?? []).map((item) => item.forecast),
+		);
 		const active = input.recurring.filter((r) => isRecurringActiveInMonth(r, m, input.startMonth, input.endMonth));
 		const recurringTotal = sumMoney(
 			currency,
@@ -147,8 +153,28 @@ export function computePlanResults(input: PlanInput): PlanResults {
 		);
 		const recurringTotalTriple = triple(recurringTotalForecast, recurringTotalEffective);
 
+		const oneTimeRows: OneTimeExpenseRow[] = (oneTimeByMonth.get(m) ?? []).map((item) => {
+			const actualAmount = oneTimeActualById.get(item.id) ?? null;
+			return {
+				id: item.id,
+				name: item.name,
+				date: item.date,
+				forecast: item.forecast,
+				actual: actualAmount,
+				effective: actualAmount ?? item.forecast,
+			};
+		});
+		const oneTimeHasCorrection = oneTimeRows.some((r) => r.actual !== null);
 		const oneTimeForecast = forecastOneTime.get(m)!;
-		const oneTimeEffective = actual?.oneTimeExpense ?? oneTimeForecast;
+		// Per-item corrections win over the legacy lump sum (ADR 0002): once any item in the
+		// month has been corrected, the month's figure is the sum of corrected-or-forecast
+		// items, so uncorrected items keep contributing their plan value.
+		const oneTimeEffective = oneTimeHasCorrection
+			? sumMoney(
+					currency,
+					oneTimeRows.map((r) => r.effective),
+				)
+			: (actual?.oneTimeExpense ?? oneTimeForecast);
 		const oneTimeTriple = triple(oneTimeForecast, oneTimeEffective);
 
 		const expensesForecast = forecastExpenses.get(m)!;
@@ -169,7 +195,7 @@ export function computePlanResults(input: PlanInput): PlanResults {
 		const aggregateHasActual =
 			actual !== null && (actual.income !== null || actual.oneTimeExpense !== null || actual.investment !== null);
 		const recurringHasActual = recurringRows.some((r) => r.actual !== null);
-		const hasAnyActual = aggregateHasActual || recurringHasActual;
+		const hasAnyActual = aggregateHasActual || recurringHasActual || oneTimeHasCorrection;
 		const hasOverride = override !== null;
 
 		// Balance hierarchy: override -> actual-derived -> forecast.
@@ -209,6 +235,7 @@ export function computePlanResults(input: PlanInput): PlanResults {
 			income: incomeTriple,
 			recurringRows,
 			recurringTotal: recurringTotalTriple,
+			oneTimeRows,
 			oneTimeTotal: oneTimeTriple,
 			expensesTotal: expensesTriple,
 			surplus: surplusTriple,
