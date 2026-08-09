@@ -1,0 +1,34 @@
+{
+	"name": "cash-flow-monitor",
+	"version": "0.0.1",
+	"type": "module",
+	"description": "Aplikacja desktop do planowania przepływów pieniężnych (prognoza vs wykonanie)",
+	"scripts": {
+		"start": "vite build && electrobun dev",
+		"dev": "electrobun dev --watch",
+		"dev:hmr": "concurrently \"bun run hmr\" \"bun run start\"",
+		"hmr": "vite --port 5173",
+		"build:canary": "vite build && electrobun build --env=canary",
+		"test": "bun test",
+		"typecheck": "vue-tsc --noEmit",
+		"db:generate": "drizzle-kit generate"
+	},
+	"dependencies": {
+		"drizzle-orm": "^0.45.2",
+		"electrobun": "1.18.1",
+		"vue-i18n": "^11.4.8"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@vitejs/plugin-vue": "^5.2.1",
+		"autoprefixer": "^10.5.4",
+		"concurrently": "^9.1.0",
+		"drizzle-kit": "^0.31.10",
+		"postcss": "^8.5.26",
+		"tailwindcss": "^3",
+		"typescript": "^5.7.2",
+		"vite": "^6.0.3",
+		"vue": "^3.5.13",
+		"vue-tsc": "^2.2.0"
+	}
+}
