@@ -38,4 +38,4 @@ I want to store my data on my local machine and not in the cloud.
 
 ### Why did I use javascript for money-counting solution?
 
-I enjoy building frontends with Vue and Tailwind and wanted to test out new tech (Electrobun) and do some cross-platform development. Normally I would use something like .NET as a backend but this app is too small to split it into independent deployments.
+I enjoy building frontends with Vue and Tailwind. This stack gives me great developer experience which I believe translates into great end-user experience. I wanted to test out new tech (Electrobun) and do some cross-platform development. Normally I would use something like .NET as a backend but this app is too small to split it into independent deployments.
