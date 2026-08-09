@@ -47,7 +47,7 @@ describe("allocateInvestment", () => {
 	test("a month with negative or zero forecast surplus gets only the minimum", () => {
 		const months = ["2026-01", "2026-02", "2026-03"];
 		const surplus = new Map([
-			["2026-01", -500_00], // deficit month: minimum only, per plan.md's documented intent
+			["2026-01", -500_00], // deficit month: minimum only, per ADR 0001 §3's documented intent
 			["2026-02", 0],
 			["2026-03", 1000_00],
 		]);
