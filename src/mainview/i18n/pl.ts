@@ -69,6 +69,23 @@ export default {
 		saving: "Zapisywanie…",
 	},
 
+	updates: {
+		check: "Sprawdź aktualizacje",
+		checking: "Sprawdzanie aktualizacji…",
+		availableTitle: "Dostępna jest nowa wersja",
+		availableBody:
+			"Aplikacja pobierze aktualizację i uruchomi się ponownie. Zapisz zmiany przed kontynuowaniem.",
+		version: "Wersja {version}",
+		update: "Zaktualizuj teraz",
+		later: "Później",
+		downloading: "Pobieranie aktualizacji…",
+		applying: "Instalowanie aktualizacji…",
+		restartNotice: "Aplikacja uruchomi się ponownie za chwilę.",
+		upToDateTitle: "Używasz najnowszej wersji",
+		errorTitle: "Nie udało się sprawdzić aktualizacji",
+		errorBody: "Sprawdź połączenie z internetem i spróbuj ponownie.",
+	},
+
 	assumptions: {
 		title: "Założenia",
 		incomeSection: "Wpływy",

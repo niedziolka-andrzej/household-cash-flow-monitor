@@ -12,7 +12,8 @@
 		"build:canary": "vite build && electrobun build --env=canary",
 		"test": "bun test",
 		"typecheck": "vue-tsc --noEmit",
-		"db:generate": "drizzle-kit generate"
+		"db:generate": "drizzle-kit generate",
+		"db:promote": "bun run scripts/promote-db.ts"
 	},
 	"dependencies": {
 		"drizzle-orm": "^0.45.2",
