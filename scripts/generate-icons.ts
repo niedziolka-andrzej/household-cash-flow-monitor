@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * `bun run icons` — regenerates every packaged app icon from the Lucide "banknote" glyph.
+ * `bun run icons` — regenerates every packaged app icon from the Lucide "wallet-minimal" glyph.
  *
  * The output is committed, because CI only runs `bun run build` (see .github/workflows/
  * release.yml) and electrobun reads these files straight off disk while assembling the
@@ -11,10 +11,10 @@
  * installed (and `convert.exe` on Windows is the NTFS filesystem converter — running it on a
  * drive is destructive, so it must never be mistaken for one), and pulling in a rasterizer
  * would add a native dependency to a project that otherwise builds with just Bun and Vite.
- * Instead we evaluate the glyph as a signed distance field: the artwork is four primitives,
- * every one of which has a closed-form distance function, so a few lines of arithmetic give
- * exact anti-aliased coverage at any size — including the 1024px macOS slice that a
- * hand-drawn bitmap set would never cover.
+ * Instead we evaluate the glyph as a signed distance field: the artwork decomposes into line
+ * segments, quarter-circle arcs, and a dot, every one of which has a closed-form distance
+ * function, so a few lines of arithmetic give exact anti-aliased coverage at any size —
+ * including the 1024px macOS slice that a hand-drawn bitmap set would never cover.
  *
  * Usage:
  *   bun run icons
@@ -29,16 +29,27 @@ import { deflateSync } from "node:zlib";
 // ---------------------------------------------------------------------------
 
 /** Lucide's grid. The primitives below are copied verbatim from lucide-static v1.31.0
- * `icons/banknote.svg` (ISC licence), so the icon stays recognisably the upstream glyph. */
+ * `icons/wallet-minimal.svg` (ISC licence), so the icon stays recognisably the upstream glyph.
+ * The glyph is a single open outline — five straight edges joined by four quarter-circle
+ * corners, deliberately left open at the flap fold — plus one dot. */
 const GRID = 24;
-const NOTE = { x: 2, y: 6, w: 20, h: 12, r: 2 } as const;
-const COIN = { cx: 12, cy: 12, r: 2 } as const;
-/** The `M6 12h.01M18 12h.01` sub-paths. A segment that short with `stroke-linecap="round"`
- * renders as a dot one stroke-width across, so we draw it as exactly that. */
-const DOTS = [
-	{ x: 6, y: 12 },
-	{ x: 18, y: 12 },
-] as const;
+const WALLET_EDGES: ReadonlyArray<readonly [number, number, number, number]> = [
+	[7, 7, 19, 7], // flap fold
+	[21, 9, 21, 19], // right side
+	[19, 21, 5, 21], // bottom
+	[3, 19, 3, 5], // left side
+	[5, 3, 19, 3], // top
+];
+/** cx, cy, r, and the arc's angular span (radians) from `a0` to `a1`. */
+const WALLET_CORNERS: ReadonlyArray<readonly [number, number, number, number, number]> = [
+	[19, 9, 2, -Math.PI / 2, 0],
+	[19, 19, 2, 0, Math.PI / 2],
+	[3, 21, 2, 0, -Math.PI / 2],
+	[5, 5, 2, Math.PI, Math.PI * 1.5],
+];
+/** The `M17 14h.01` sub-path. A segment that short with `stroke-linecap="round"` renders as a
+ * dot one stroke-width across, so we draw it as exactly that. */
+const DOT = { x: 17, y: 14 } as const;
 const STROKE = 2;
 
 /** `accent.DEFAULT` and `surface` from tailwind.config.js — the app's single accent, so the
@@ -46,8 +57,9 @@ const STROKE = 2;
 const ACCENT = "#4338ca";
 const ACCENT_RGB = [0x43, 0x38, 0xca] as const;
 
-/** Fraction of the canvas the 24-unit glyph box spans. The glyph's ink only occupies rows
- * 5–19 of that box, so this leaves a wide margin vertically and ~14% horizontally. */
+/** Fraction of the canvas the 24-unit glyph box spans. The glyph's own ink already leaves a
+ * ~12.5% margin on every side of that box (it spans grid units 3–21), so this adds clearance
+ * evenly rather than favouring one axis. */
 const GLYPH_SCALE = 0.72;
 /** Corner radius as a fraction of the icon's width. Full-bleed rounded square rather than a
  * padded squircle: Windows is the shipping target and draws the icon edge-to-edge. */
@@ -77,6 +89,32 @@ function sdCircle(px: number, py: number, cx: number, cy: number, radius: number
 	return Math.hypot(px - cx, py - cy) - radius;
 }
 
+/** Unsigned distance from (px,py) to the line segment from (ax,ay) to (bx,by). */
+function sdSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+	const abx = bx - ax;
+	const aby = by - ay;
+	const t = Math.min(Math.max(((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby), 0), 1);
+	return Math.hypot(px - (ax + t * abx), py - (ay + t * aby));
+}
+
+/** Unsigned distance from (px,py) to the circular arc of radius `r` centred on (cx,cy) that
+ * runs from angle `a0` to `a1` (radians, span under a half-turn). Off the arc's span, the
+ * nearest point is whichever endpoint is closer — same as a rounded line cap. */
+function sdArc(px: number, py: number, cx: number, cy: number, r: number, a0: number, a1: number): number {
+	const vx = px - cx;
+	const vy = py - cy;
+	const u0x = Math.cos(a0);
+	const u0y = Math.sin(a0);
+	const u1x = Math.cos(a1);
+	const u1y = Math.sin(a1);
+	// Angles of v and u1, measured relative to u0 — avoids a branch cut at ±π.
+	const relV = Math.atan2(u0x * vy - u0y * vx, u0x * vx + u0y * vy);
+	const relEnd = Math.atan2(u0x * u1y - u0y * u1x, u0x * u1x + u0y * u1y);
+	const within = relEnd >= 0 ? relV >= 0 && relV <= relEnd : relV <= 0 && relV >= relEnd;
+	if (within) return Math.abs(Math.hypot(vx, vy) - r);
+	return Math.min(Math.hypot(px - (cx + r * u0x), py - (cy + r * u0y)), Math.hypot(px - (cx + r * u1x), py - (cy + r * u1y)));
+}
+
 /** Coverage of a pixel whose centre sits `d` pixels from the edge. Linear ramp across the one
  * pixel straddling the boundary, which is what a distance field buys us over supersampling. */
 function coverage(d: number): number {
@@ -84,7 +122,7 @@ function coverage(d: number): number {
 }
 
 /** Optical correction. A 2/24 stroke scaled to 16px is under a pixel wide, and linear
- * anti-aliasing renders sub-pixel strokes as a pale smear — the note dissolves into its own
+ * anti-aliasing renders sub-pixel strokes as a pale smear — the glyph dissolves into its own
  * background in the taskbar. Thickening it at small sizes keeps the shape legible; by 48px
  * the stroke covers enough pixels to stand on its own. */
 function strokeBoost(size: number): number {
@@ -113,15 +151,13 @@ export function renderIcon(size: number): Uint8Array {
 			// Map the pixel centre into the glyph's 24-unit space.
 			const gx = (sx - centre) / unit + GRID / 2;
 			const gy = (sy - centre) / unit + GRID / 2;
-			// Outlines are |distance| - halfStroke; the union of shapes is the min of distances.
-			let d = Math.abs(
-				sdRoundedRect(gx, gy, NOTE.x + NOTE.w / 2, NOTE.y + NOTE.h / 2, NOTE.w / 2, NOTE.h / 2, NOTE.r),
-			);
-			d = Math.min(d, Math.abs(sdCircle(gx, gy, COIN.cx, COIN.cy, COIN.r)));
+			// The outline is a curve, not a filled region, so distance-to-curve is already the
+			// ink boundary; the union of pieces is the min of distances.
+			let d = Infinity;
+			for (const [ax, ay, bx, by] of WALLET_EDGES) d = Math.min(d, sdSegment(gx, gy, ax, ay, bx, by));
+			for (const [cx, cy, r, a0, a1] of WALLET_CORNERS) d = Math.min(d, sdArc(gx, gy, cx, cy, r, a0, a1));
 			d -= halfStroke;
-			for (const dot of DOTS) {
-				d = Math.min(d, sdCircle(gx, gy, dot.x, dot.y, halfStroke));
-			}
+			d = Math.min(d, sdCircle(gx, gy, DOT.x, DOT.y, halfStroke));
 			// Back to pixels before anti-aliasing, and clipped to the square it sits on.
 			const ink = Math.min(coverage(d * unit), bg);
 
@@ -146,11 +182,10 @@ export function renderSvg(): string {
 	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${GRID} ${GRID}" width="512" height="512" role="img" aria-label="Cash Flow Monitor">
 	<title>Cash Flow Monitor</title>
 	<rect width="${GRID}" height="${GRID}" rx="${num(GRID * BG_RADIUS)}" fill="${ACCENT}"/>
-	<!-- Lucide "banknote" (lucide-static v1.31.0, ISC), scaled about the centre. -->
+	<!-- Lucide "wallet-minimal" (lucide-static v1.31.0, ISC), scaled about the centre. -->
 	<g transform="translate(${num(inset)} ${num(inset)}) scale(${GLYPH_SCALE})" fill="none" stroke="#fff" stroke-width="${STROKE}" stroke-linecap="round" stroke-linejoin="round">
-		<rect width="${NOTE.w}" height="${NOTE.h}" x="${NOTE.x}" y="${NOTE.y}" rx="${NOTE.r}"/>
-		<circle cx="${COIN.cx}" cy="${COIN.cy}" r="${COIN.r}"/>
-		<path d="M${DOTS[0].x} ${DOTS[0].y}h.01M${DOTS[1].x} ${DOTS[1].y}h.01"/>
+		<path d="M${DOT.x} ${DOT.y}h.01"/>
+		<path d="M7 7h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14"/>
 	</g>
 </svg>
 `;

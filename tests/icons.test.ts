@@ -63,7 +63,8 @@ describe("renderIcon", () => {
 	test("draws the glyph in white", () => {
 		const size = 256;
 		const rgba = renderIcon(size);
-		// The coin outline passes through the centre row; scan it for a fully white pixel.
+		// The wallet's left and right sides pass through the centre row; scan it for a fully
+		// white pixel.
 		let whitest = 0;
 		for (let x = 0; x < size; x++) whitest = Math.max(whitest, pixel(rgba, size, x, size / 2).r);
 		expect(whitest).toBe(0xff);
@@ -72,7 +73,7 @@ describe("renderIcon", () => {
 	test("keeps the glyph clear of the edges at every shipped size", () => {
 		for (const size of ICO_SIZES) {
 			const rgba = renderIcon(size);
-			// Top-centre is inside the square but above the note, so it must stay pure accent —
+			// Top-centre is inside the square but above the wallet, so it must stay pure accent —
 			// this catches a glyph scale or stroke boost that grew enough to touch the border.
 			const top = pixel(rgba, size, Math.floor(size / 2), 0);
 			expect({ size, ...top }).toMatchObject({ size, r: 0x43, g: 0x38, b: 0xca });
@@ -157,11 +158,10 @@ describe("encodeIco", () => {
 });
 
 describe("renderSvg", () => {
-	test("keeps Lucide's banknote primitives verbatim", () => {
+	test("keeps Lucide's wallet-minimal primitives verbatim", () => {
 		const svg = renderSvg();
-		expect(svg).toContain('<rect width="20" height="12" x="2" y="6" rx="2"/>');
-		expect(svg).toContain('<circle cx="12" cy="12" r="2"/>');
-		expect(svg).toContain('d="M6 12h.01M18 12h.01"');
+		expect(svg).toContain('d="M17 14h.01"');
+		expect(svg).toContain('d="M7 7h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14"');
 		expect(svg).toContain('stroke-linecap="round"');
 	});
 
