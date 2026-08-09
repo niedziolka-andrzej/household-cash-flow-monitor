@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cash Flow Monitor</title>
+    <!-- Relative on purpose: Vite hashes this into dist/assets/, the one directory
+         electrobun.config.ts copies into the bundle. A `/`-rooted or public/ path would
+         resolve in dev and 404 in the packaged app. Regenerate with `bun run icons`. -->
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <!-- Typefaces from the design comp. Remote, so an offline launch falls back to the
          system sans declared in tailwind.config.js rather than blocking render. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
