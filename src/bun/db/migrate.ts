@@ -14,6 +14,11 @@ import migration0000 from "../../../drizzle/0000_stale_eternity.sql" with { type
 /** Index + 1 = schema version, tracked via `PRAGMA user_version`. */
 const MIGRATIONS: readonly string[] = [migration0000];
 
+/** The `user_version` a database is at once this build has migrated it. Tooling that
+ * moves database files between channels compares against this to refuse a transfer
+ * from a newer schema into an older build. */
+export const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
+
 /**
  * Applies every migration above the DB's current `PRAGMA user_version`, each inside
  * its own transaction. Safe to call on every startup — already-applied migrations
