@@ -29,6 +29,13 @@ import {
 	updateRecurringExpense,
 } from "../db/repositories/itemsRepo";
 import { createPlanCore, deletePlanCore, duplicatePlanCore, requirePlanCore, updatePlanCore } from "../db/repositories/planRepo";
+import {
+	acceptUpdate,
+	dismissUpdate,
+	getUpdateState,
+	initUpdater,
+	runUpdateCheck,
+} from "../updater";
 import { buildSnapshot, listPlanSummaries } from "./snapshot";
 
 /**
@@ -64,7 +71,7 @@ const SCREEN_MARGIN_X = 40;
 const SCREEN_MARGIN_Y = 60;
 
 export function createCashflowRpc(db: AppDatabase, getWindow: () => BrowserWindow | null) {
-	return BrowserView.defineRPC<CashflowRPC>({
+	const rpc = BrowserView.defineRPC<CashflowRPC>({
 		maxRequestTime: 5000,
 		handlers: {
 			requests: {
@@ -234,8 +241,28 @@ export function createCashflowRpc(db: AppDatabase, getWindow: () => BrowserWindo
 					}
 					return { width, height };
 				},
+
+				getUpdateState: () => getUpdateState(),
 			},
-			messages: {},
+			messages: {
+				// All three are fire-and-forget; failures surface as an "error" phase pushed
+				// back through updateStateChanged, not as a rejected request.
+				requestUpdateCheck: () => {
+					runUpdateCheck({ userInitiated: true }).catch((error) =>
+						console.error("Sprawdzanie aktualizacji nie powiodło się:", error),
+					);
+				},
+				acceptUpdate: () => {
+					acceptUpdate().catch((error) =>
+						console.error("Instalacja aktualizacji nie powiodła się:", error),
+					);
+				},
+				dismissUpdate: () => dismissUpdate(),
+			},
 		},
 	});
+
+	initUpdater((next) => rpc.send.updateStateChanged(next));
+
+	return rpc;
 }

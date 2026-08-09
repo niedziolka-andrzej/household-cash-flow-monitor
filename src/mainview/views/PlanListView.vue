@@ -6,6 +6,7 @@ import type { PlanCoreInput, PlanSummary } from "../../shared/types";
 import PlanFormModal, { type PlanFormInitial } from "../components/PlanFormModal.vue";
 import Tag from "../components/Tag.vue";
 import { goToPlan } from "../store/navigation";
+import { checkForUpdates } from "../store/updateStore";
 import {
 	createPlan,
 	deletePlan,
@@ -91,15 +92,24 @@ function formatMonth(month: string): string {
 	<div class="mx-auto max-w-[1180px] px-8 pb-20 pt-8">
 		<div class="mb-7 flex items-center justify-between gap-4">
 			<h1 class="font-display text-3xl font-bold text-ink">{{ t("planList.title") }}</h1>
-			<button
-				class="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-accent hover:bg-accent-hover"
-				@click="openCreateModal"
-			>
-				<svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-					<path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" />
-				</svg>
-				{{ t("planList.newPlan") }}
-			</button>
+			<div class="flex items-center gap-3">
+				<button
+					type="button"
+					class="rounded-control px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-neutralSoft"
+					@click="checkForUpdates"
+				>
+					{{ t("updates.check") }}
+				</button>
+				<button
+					class="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-accent hover:bg-accent-hover"
+					@click="openCreateModal"
+				>
+					<svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+						<path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" />
+					</svg>
+					{{ t("planList.newPlan") }}
+				</button>
+			</div>
 		</div>
 
 		<p

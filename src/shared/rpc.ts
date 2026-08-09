@@ -1,4 +1,5 @@
 import type { Money } from "./money";
+import type { UpdateState } from "./update";
 import type {
 	IncomeItemInput,
 	InvestmentConfigInput,
@@ -91,12 +92,31 @@ export type CashflowRPC = {
 				params: { availWidth: number; availHeight: number };
 				response: { width: number; height: number };
 			};
+
+			/**
+			 * Read the updater's current state. The webview asks on mount because the startup
+			 * check can finish before the view is listening, and a pushed message would then
+			 * be dropped — leaving a found update silently unannounced.
+			 */
+			getUpdateState: { params: Record<string, never>; response: UpdateState };
 		};
-		messages: Record<string, never>;
+		/**
+		 * Messages, not requests, on purpose: a check-download-install cycle runs for far
+		 * longer than `maxRequestTime` (5s), so it cannot be awaited across the bridge.
+		 * Progress comes back via the `updateStateChanged` message instead.
+		 */
+		messages: {
+			requestUpdateCheck: Record<string, never>;
+			acceptUpdate: Record<string, never>;
+			/** Closes the current notice; on an offer it also remembers the declined build. */
+			dismissUpdate: Record<string, never>;
+		};
 	};
 	webview: {
 		requests: Record<string, never>;
-		messages: Record<string, never>;
+		messages: {
+			updateStateChanged: UpdateState;
+		};
 	};
 };
 

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { BrowserWindow, Updater, Utils } from "electrobun/bun";
 import { createDatabase } from "./db/database";
 import { createCashflowRpc } from "./rpc/handlers";
-import { checkForUpdateWithConsent, registerUpdateMenu } from "./updater";
+import { runUpdateCheck } from "./updater";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -58,8 +58,9 @@ mainWindow = new BrowserWindow({
 
 console.log("Cash Flow Monitor: aplikacja wystartowała.");
 
-registerUpdateMenu();
-
-// Deliberately after the window exists so the app paints before any dialog appears.
-// Awaiting the fetch yields to the event loop, so this doesn't hold up first paint.
-await checkForUpdateWithConsent();
+// Fire-and-forget: the result lands in the updater's state, and the webview picks it up
+// either from the pushed `updateStateChanged` message or by asking on mount — so it does
+// not matter whether this settles before or after the view is listening.
+runUpdateCheck({ userInitiated: false }).catch((error) =>
+	console.error("Sprawdzanie aktualizacji nie powiodło się:", error),
+);
