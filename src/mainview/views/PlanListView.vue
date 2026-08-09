@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { money } from "../../shared/money";
+import { formatMoney, money } from "../../shared/money";
 import type { PlanCoreInput, PlanSummary } from "../../shared/types";
-import MoneyCell from "../components/MoneyCell.vue";
 import PlanFormModal, { type PlanFormInitial } from "../components/PlanFormModal.vue";
-import RiskBadge from "../components/RiskBadge.vue";
+import Tag from "../components/Tag.vue";
 import { goToPlan } from "../store/navigation";
-import { createPlan, deletePlan, duplicatePlan, loadPlans, openPlan, planStore, updatePlanCore } from "../store/planStore";
+import {
+	createPlan,
+	deletePlan,
+	duplicatePlan,
+	loadPlans,
+	openPlan,
+	planStore,
+	updatePlanCore,
+} from "../store/planStore";
 
 const { t } = useI18n();
 
@@ -26,8 +33,8 @@ function openCreateModal(): void {
 }
 
 async function openEditModal(summary: PlanSummary): Promise<void> {
-	// Fetch the full plan (PlanSummary has no openingBalance) so the form is
-	// seeded with the real value instead of a placeholder.
+	// Fetch the full plan (PlanSummary has no openingBalance) so the form is seeded with
+	// the real value instead of a placeholder.
 	await openPlan(summary.id);
 	if (!planStore.current) return;
 	modalMode.value = "edit";
@@ -43,7 +50,7 @@ function openDuplicateModal(summary: PlanSummary): void {
 		startMonth: summary.startMonth,
 		endMonth: summary.endMonth,
 		currency: summary.currency,
-		openingBalance: money(0, summary.currency), // not shown/sent for duplicate — server copies the real value
+		openingBalance: money(0, summary.currency), // not shown/sent for duplicate — the server copies the real value
 	};
 	modalTargetPlanId.value = summary.id;
 	modalOpen.value = true;
@@ -81,56 +88,72 @@ function formatMonth(month: string): string {
 </script>
 
 <template>
-	<div class="mx-auto max-w-4xl p-6">
-		<div class="mb-6 flex items-center justify-between">
-			<h1 class="text-2xl font-semibold text-gray-900">{{ t("planList.title") }}</h1>
+	<div class="mx-auto max-w-[1180px] px-8 pb-20 pt-8">
+		<div class="mb-7 flex items-center justify-between gap-4">
+			<h1 class="font-display text-3xl font-bold text-ink">{{ t("planList.title") }}</h1>
 			<button
-				class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+				class="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-accent hover:bg-accent-hover"
 				@click="openCreateModal"
 			>
-				+ {{ t("planList.newPlan") }}
+				<svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+					<path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" />
+				</svg>
+				{{ t("planList.newPlan") }}
 			</button>
 		</div>
 
-		<p v-if="planStore.plans.length === 0 && !planStore.loading" class="rounded border border-dashed border-gray-300 p-8 text-center text-gray-500">
+		<p
+			v-if="planStore.plans.length === 0 && !planStore.loading"
+			class="rounded-card bg-surface p-10 text-center text-ink-subtle shadow-card"
+		>
 			{{ t("planList.empty") }}
 		</p>
 
-		<div class="grid gap-4 sm:grid-cols-2">
-			<div
-				v-for="plan in planStore.plans"
-				:key="plan.id"
-				class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
-			>
-				<div class="mb-2 flex items-start justify-between gap-2">
-					<h2 class="text-lg font-medium text-gray-900">{{ plan.name }}</h2>
-					<RiskBadge v-if="plan.hasRisk" :label="t('planList.risk')" />
+		<div class="grid gap-6 sm:grid-cols-2">
+			<div v-for="plan in planStore.plans" :key="plan.id" class="rounded-card bg-surface p-6 shadow-card">
+				<div class="mb-1.5 flex items-start justify-between gap-3">
+					<h2 class="font-display text-xl font-bold text-ink">{{ plan.name }}</h2>
+					<Tag v-if="plan.hasRisk" tone="danger" :title="t('planList.risk')">⚠ {{ t("table.tagNegative") }}</Tag>
 				</div>
-				<p class="mb-3 text-sm text-gray-500">
-					{{ t("planList.range") }}: {{ formatMonth(plan.startMonth) }} – {{ formatMonth(plan.endMonth) }}
+				<p class="mb-4 text-sm text-ink-subtle">
+					{{ formatMonth(plan.startMonth) }} – {{ formatMonth(plan.endMonth) }}
 				</p>
-				<dl class="mb-4 space-y-1 text-sm">
-					<div class="flex justify-between">
-						<dt class="text-gray-500">{{ t("planList.finalForecast") }}</dt>
-						<dd><MoneyCell :value="plan.finalCumulativeForecast" /></dd>
+				<dl class="mb-5 space-y-1.5 text-sm">
+					<div class="flex justify-between gap-3">
+						<dt class="text-ink-subtle">{{ t("planList.finalForecast") }}</dt>
+						<dd class="tabular-nums">{{ formatMoney(plan.finalCumulativeForecast, "pl-PL") }}</dd>
 					</div>
-					<div class="flex justify-between">
-						<dt class="text-gray-500">{{ t("planList.finalEffective") }}</dt>
-						<dd><MoneyCell :value="plan.finalCumulativeEffective" variant="auto" /></dd>
+					<div class="flex justify-between gap-3">
+						<dt class="text-ink-subtle">{{ t("planList.finalEffective") }}</dt>
+						<dd
+							class="font-semibold tabular-nums"
+							:class="plan.finalCumulativeEffective.amountMinor < 0 ? 'text-danger' : 'text-accent'"
+						>
+							{{ formatMoney(plan.finalCumulativeEffective, "pl-PL") }}
+						</dd>
 					</div>
 				</dl>
 				<div class="flex flex-wrap gap-2 text-sm">
-					<button class="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700" @click="goToPlan(plan.id)">
+					<button
+						class="rounded-control bg-accent px-3.5 py-2 font-semibold text-white hover:bg-accent-hover"
+						@click="goToPlan(plan.id)"
+					>
 						{{ t("planList.open") }}
 					</button>
-					<button class="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50" @click="openEditModal(plan)">
+					<button
+						class="rounded-control border border-edge px-3.5 py-2 font-semibold text-ink-muted hover:bg-neutralSoft"
+						@click="openEditModal(plan)"
+					>
 						{{ t("common.edit") }}
 					</button>
-					<button class="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50" @click="openDuplicateModal(plan)">
+					<button
+						class="rounded-control border border-edge px-3.5 py-2 font-semibold text-ink-muted hover:bg-neutralSoft"
+						@click="openDuplicateModal(plan)"
+					>
 						{{ t("planList.duplicate") }}
 					</button>
 					<button
-						class="rounded border border-red-300 px-3 py-1 text-red-600 hover:bg-red-50"
+						class="rounded-control border border-danger/30 px-3.5 py-2 font-semibold text-danger hover:bg-danger-soft"
 						@click="deleteTarget = plan"
 					>
 						{{ t("common.delete") }}
@@ -147,16 +170,19 @@ function formatMonth(month: string): string {
 			@submit="onModalSubmit"
 		/>
 
-		<div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-			<div class="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-				<h2 class="mb-2 text-lg font-semibold text-gray-900">{{ t("planList.deleteConfirmTitle") }}</h2>
-				<p class="mb-4 text-sm text-gray-600">{{ t("planList.deleteConfirmBody") }}</p>
-				<div class="flex justify-end gap-2">
-					<button class="rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="deleteTarget = null">
+		<div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+			<div class="w-full max-w-sm rounded-card bg-surface p-6 shadow-xl">
+				<h2 class="mb-2 font-display text-lg font-bold text-ink">{{ t("planList.deleteConfirmTitle") }}</h2>
+				<p class="mb-5 text-sm text-ink-muted">{{ t("planList.deleteConfirmBody") }}</p>
+				<div class="flex justify-end gap-3">
+					<button
+						class="rounded-control px-3.5 py-2 text-sm font-semibold text-ink-muted hover:bg-neutralSoft"
+						@click="deleteTarget = null"
+					>
 						{{ t("common.cancel") }}
 					</button>
 					<button
-						class="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+						class="rounded-control bg-danger px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90"
 						@click="confirmDelete"
 					>
 						{{ t("common.delete") }}

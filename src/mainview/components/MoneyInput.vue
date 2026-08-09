@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
-import { type Money, parseAmountInput } from "../../shared/money";
+import { computed, nextTick, ref, watch } from "vue";
+import { currencySymbol, type Money, parseAmountInput } from "../../shared/money";
 
 const props = defineProps<{
 	modelValue: Money | null;
 	currency: string;
 	placeholder?: string;
 	disabled?: boolean;
+	/** Hide the trailing currency badge where the surrounding text already states the unit. */
+	hideCurrency?: boolean;
 }>();
 const emit = defineEmits<{
 	"update:modelValue": [value: Money | null];
@@ -26,6 +28,7 @@ function toDisplayText(value: Money | null): string {
 const text = ref(toDisplayText(props.modelValue));
 const focused = ref(false);
 const inputEl = ref<HTMLInputElement | null>(null);
+const symbol = computed(() => currencySymbol(props.currency, "pl-PL"));
 
 // Only resync from the outside while the user isn't actively typing, so an
 // incoming snapshot refresh never clobbers a half-typed value.
@@ -108,17 +111,26 @@ defineExpose({
 </script>
 
 <template>
-	<input
-		ref="inputEl"
-		:value="text"
-		type="text"
-		inputmode="decimal"
-		class="w-full rounded border border-gray-300 px-2 py-1 text-right tabular-nums focus:border-blue-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
-		:placeholder="placeholder"
-		:disabled="disabled"
-		@input="onInput"
-		@focus="onFocus"
-		@blur="onBlur"
-		@keydown.enter="onEnter"
-	/>
+	<span class="inline-flex w-full items-stretch">
+		<input
+			ref="inputEl"
+			:value="text"
+			type="text"
+			inputmode="decimal"
+			class="w-full border border-edgeStrong px-2 py-1.5 text-right tabular-nums focus:border-accent focus:outline-none disabled:bg-neutralSoft disabled:text-ink-faint"
+			:class="hideCurrency ? 'rounded-lg' : 'rounded-l-lg'"
+			:placeholder="placeholder"
+			:disabled="disabled"
+			@input="onInput"
+			@focus="onFocus"
+			@blur="onBlur"
+			@keydown.enter="onEnter"
+		/>
+		<!-- The number itself is shown unformatted while editing, so the unit is stated here. -->
+		<span
+			v-if="!hideCurrency"
+			class="inline-flex items-center rounded-r-lg border border-l-0 border-edgeStrong bg-neutralSoft px-2 text-xs font-semibold text-ink-subtle"
+			>{{ symbol }}</span
+		>
+	</span>
 </template>

@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { money, type Money } from "../../shared/money";
 import type { PlanCoreInput } from "../../shared/types";
 import MoneyInput from "./MoneyInput.vue";
-import MonthPicker from "./MonthPicker.vue";
+import MonthInput from "./MonthInput.vue";
 
 const DEFAULT_CURRENCY = "PLN";
 
@@ -90,18 +90,18 @@ function onSubmit(): void {
 </script>
 
 <template>
-	<div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-		<div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-			<h2 class="mb-4 text-lg font-semibold text-gray-900">{{ title }}</h2>
+	<div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+		<div class="w-full max-w-md rounded-card bg-surface p-6 shadow-xl">
+			<h2 class="mb-5 font-display text-lg font-bold text-ink">{{ title }}</h2>
 
 			<form class="space-y-4" @submit.prevent="onSubmit">
 				<div>
-					<label class="mb-1 block text-sm font-medium text-gray-700">{{ t("planForm.name") }}</label>
+					<label class="mb-1.5 block text-xs text-ink-subtle">{{ t("planForm.name") }}</label>
 					<input
 						v-model="form.name"
 						type="text"
 						required
-						class="w-full rounded border border-gray-300 px-2 py-1 focus:border-blue-500 focus:outline-none"
+						class="w-full rounded-lg border border-edgeStrong px-2.5 py-2 focus:border-accent focus:outline-none"
 						:placeholder="mode === 'duplicate' ? t('planForm.duplicateNamePlaceholder') : t('planForm.namePlaceholder')"
 					/>
 				</div>
@@ -109,29 +109,32 @@ function onSubmit(): void {
 				<template v-if="mode !== 'duplicate'">
 					<div class="grid grid-cols-2 gap-4">
 						<div>
-							<label class="mb-1 block text-sm font-medium text-gray-700">{{ t("planForm.startMonth") }}</label>
-							<MonthPicker v-model="form.startMonth" />
+							<label class="mb-1.5 block text-xs text-ink-subtle">{{ t("planForm.startMonth") }}</label>
+							<MonthInput v-model="form.startMonth" />
 						</div>
 						<div>
-							<label class="mb-1 block text-sm font-medium text-gray-700">{{ t("planForm.endMonth") }}</label>
-							<MonthPicker v-model="form.endMonth" />
+							<label class="mb-1.5 block text-xs text-ink-subtle">{{ t("planForm.endMonth") }}</label>
+							<MonthInput v-model="form.endMonth" />
 						</div>
 					</div>
 					<div>
-						<label class="mb-1 block text-sm font-medium text-gray-700">{{ t("planForm.openingBalance") }}</label>
+						<label class="mb-1.5 block text-xs text-ink-subtle">{{ t("planForm.openingBalance") }}</label>
 						<MoneyInput v-model="form.openingBalance" :currency="form.currency" />
 					</div>
 				</template>
 
-				<div class="flex justify-end gap-2 pt-2">
+				<div class="flex justify-end gap-3 pt-2">
 					<button
 						type="button"
-						class="rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+						class="rounded-control px-3.5 py-2 text-sm font-semibold text-ink-muted hover:bg-neutralSoft"
 						@click="emit('close')"
 					>
 						{{ t("common.cancel") }}
 					</button>
-					<button type="submit" class="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+					<button
+						type="submit"
+						class="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+					>
 						{{ t("common.save") }}
 					</button>
 				</div>

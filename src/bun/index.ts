@@ -34,10 +34,16 @@ const dbPath = join(dataDir, "cash-flow-monitor.sqlite");
 const db = createDatabase(dbPath);
 console.log(`Baza danych: ${dbPath}`);
 
-const rpc = createCashflowRpc(db);
+// The RPC handlers need the window (to fit it to the display), but the window needs the
+// RPC object at construction — hence the getter closing over a slot filled in just below.
+let mainWindow: BrowserWindow | null = null;
+const rpc = createCashflowRpc(db, () => mainWindow);
 const url = await getMainViewUrl();
 
-new BrowserWindow({
+// A first-paint size only: once the webview mounts it reports the display metrics and the
+// main process resizes the window to fill the available space and re-centers it (see
+// `fitWindowToScreen`). These numbers just avoid a zero-sized flash before that lands.
+mainWindow = new BrowserWindow({
 	title: "Cash Flow Monitor",
 	url,
 	rpc,

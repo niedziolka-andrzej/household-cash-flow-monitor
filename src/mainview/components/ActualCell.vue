@@ -3,14 +3,12 @@ import { nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { formatMoney, type Money } from "../../shared/money";
 import MoneyInput from "./MoneyInput.vue";
-import Tag from "./Tag.vue";
 
 /**
  * One editable figure in the monthly table. Collapsed by default — an amount plus a small
- * "+ Wykonanie" affordance — so the table reads as numbers rather than a wall of input
- * boxes; it expands into a MoneyInput only while being edited. Once a value is stored the
- * tag flips to "✓ Wykonano" (or "Korekta"), which is what makes it scannable which months
- * are already settled.
+ * pill affordance — so the table reads as numbers rather than a wall of input boxes; it
+ * expands into a MoneyInput only while being edited. Once a value is stored the pill flips
+ * to "✓ Wykonano" (or "Korekta"), which is what makes it scannable which months are settled.
  */
 const props = defineProps<{
 	/** The stored actual/override. null = nothing entered, engine falls back to `fallback`. */
@@ -18,11 +16,10 @@ const props = defineProps<{
 	/** What the engine uses when `value` is null (forecast, or the computed balance). */
 	fallback: Money;
 	currency: string;
-	/** Tag label when nothing is stored yet, e.g. "+ Wykonanie". */
+	/** Pill label when nothing is stored yet, e.g. "+ Wykonanie". */
 	addLabel: string;
-	/** Tag label when a value is stored, e.g. "✓ Wykonano". */
+	/** Pill label when a value is stored, e.g. "✓ Wykonano". */
 	setLabel: string;
-	setTone?: "info" | "warn" | "success";
 	disabled?: boolean;
 }>();
 const emit = defineEmits<{ update: [value: Money | null] }>();
@@ -55,7 +52,7 @@ function clear(): void {
 </script>
 
 <template>
-	<div class="flex flex-col items-end gap-1">
+	<div class="flex flex-col items-end gap-1.5">
 		<MoneyInput
 			v-if="editing"
 			ref="inputRef"
@@ -65,25 +62,26 @@ function clear(): void {
 			@commit="onCommit"
 		/>
 		<template v-else>
+			<span v-if="value !== null" class="tabular-nums font-semibold text-ink">
+				{{ formatMoney(value, "pl-PL") }}
+			</span>
+			<span v-else class="tabular-nums text-ink">{{ formatMoney(fallback, "pl-PL") }}</span>
+			<span v-if="value !== null" class="text-[10px] text-ink-faint tabular-nums">
+				{{ t("table.forecastPrefix") }} {{ formatMoney(fallback, "pl-PL") }}
+			</span>
 			<button
 				type="button"
-				class="flex flex-col items-end gap-1 rounded px-1 py-0.5 text-right hover:bg-blue-50/60 disabled:cursor-default disabled:hover:bg-transparent"
+				class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+				:class="value !== null ? 'bg-accent-soft text-accent' : 'bg-neutralSoft text-ink-muted hover:bg-accent-soft hover:text-accent'"
 				:disabled="disabled"
 				@click="startEditing"
 			>
-				<span class="tabular-nums" :class="value !== null ? 'font-medium text-gray-900' : 'text-gray-600'">
-					{{ formatMoney(value ?? fallback, "pl-PL") }}
-				</span>
-				<span v-if="value !== null" class="text-[10px] text-gray-400">
-					{{ t("table.forecastPrefix") }} {{ formatMoney(fallback, "pl-PL") }}
-				</span>
-				<Tag v-if="value !== null" :tone="setTone ?? 'info'">{{ setLabel }}</Tag>
-				<span v-else class="text-[10px] font-medium text-blue-600 hover:underline">{{ addLabel }}</span>
+				{{ value !== null ? setLabel : addLabel }}
 			</button>
 			<button
 				v-if="value !== null && !disabled"
 				type="button"
-				class="text-[10px] text-gray-400 hover:text-red-600 hover:underline"
+				class="text-[10px] text-ink-faint hover:text-danger hover:underline"
 				@click="clear"
 			>
 				{{ t("table.clearValue") }}

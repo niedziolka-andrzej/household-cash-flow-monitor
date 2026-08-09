@@ -1,4 +1,4 @@
-import { BrowserView } from "electrobun/bun";
+import { BrowserView, type BrowserWindow } from "electrobun/bun";
 import { DomainError, toDomainErrorPayload } from "../../shared/errors";
 import type { CashflowRPC } from "../../shared/rpc";
 import type { PlanCoreInput } from "../../shared/types";
@@ -56,7 +56,14 @@ function assertMoneyMatchesCurrency(value: { currency: string } | null, currency
 	}
 }
 
-export function createCashflowRpc(db: AppDatabase) {
+/** Don't shrink below this even on a very small display — past it the table is unusable. */
+const MIN_WINDOW_WIDTH = 800;
+const MIN_WINDOW_HEIGHT = 600;
+/** Room left for window chrome and the taskbar so the window stays fully reachable. */
+const SCREEN_MARGIN_X = 40;
+const SCREEN_MARGIN_Y = 60;
+
+export function createCashflowRpc(db: AppDatabase, getWindow: () => BrowserWindow | null) {
 	return BrowserView.defineRPC<CashflowRPC>({
 		maxRequestTime: 5000,
 		handlers: {
@@ -207,6 +214,26 @@ export function createCashflowRpc(db: AppDatabase) {
 						upsertOverride(db, planId, month, balance);
 						return buildSnapshot(db, planId);
 					}),
+
+				fitWindowToScreen: ({ availWidth, availHeight }) => {
+					const window = getWindow();
+					if (!window) return { width: 0, height: 0 };
+					const frame = window.getFrame();
+					const width = Math.max(MIN_WINDOW_WIDTH, availWidth - SCREEN_MARGIN_X);
+					const height = Math.max(MIN_WINDOW_HEIGHT, availHeight - SCREEN_MARGIN_Y);
+					// The startup frame is positioned at an offset, so growing to the full available
+					// width from there would push the right edge off-screen — center the window on
+					// whatever size we land on instead. Clamped at 0 for the case where the minimum
+					// size exceeds the display and the window is wider than the screen.
+					const x = Math.max(0, Math.round((availWidth - width) / 2));
+					const y = Math.max(0, Math.round((availHeight - height) / 2));
+					// Resizing through Electrobun also re-lays-out the webview, which is what
+					// re-syncs the viewport with the visible client area.
+					if (width !== frame.width || height !== frame.height || x !== frame.x || y !== frame.y) {
+						window.setFrame(x, y, width, height);
+					}
+					return { width, height };
+				},
 			},
 			messages: {},
 		},

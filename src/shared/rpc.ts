@@ -79,6 +79,18 @@ export type CashflowRPC = {
 				params: { planId: number; month: string; balance: Money | null };
 				response: PlanSnapshot;
 			};
+
+			/**
+			 * The webview reports the metrics of the display it actually landed on so the main
+			 * process can size the window to fill it, and re-center it at that size. Only the
+			 * webview knows this: the OS silently clamps a too-large window without telling the
+			 * webview, which then keeps laying out against a viewport wider than the visible
+			 * client area — content ends up centered off-screen and clipped on the right.
+			 */
+			fitWindowToScreen: {
+				params: { availWidth: number; availHeight: number };
+				response: { width: number; height: number };
+			};
 		};
 		messages: Record<string, never>;
 	};

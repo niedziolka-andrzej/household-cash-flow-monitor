@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { Money } from "../../shared/money";
-import type { MonthlyResult } from "../../shared/types";
-import MoneyCell from "../components/MoneyCell.vue";
-import MoneyInput from "../components/MoneyInput.vue";
+import { formatMoney, type Money } from "../../shared/money";
+import type { BalanceSource, MonthlyResult } from "../../shared/types";
+import ActualCell from "../components/ActualCell.vue";
+import CumulativeBalanceChart from "../components/CumulativeBalanceChart.vue";
+import IncomeExpenseChart from "../components/IncomeExpenseChart.vue";
+import Tag from "../components/Tag.vue";
 import { planStore, upsertMonthlyActual, upsertOverride, upsertRecurringActual } from "../store/planStore";
 
 const { t } = useI18n();
@@ -20,14 +22,29 @@ function formatMonthHeader(month: string): string {
 	return monthFormatter.format(new Date(year, m - 1, 1));
 }
 
-function balanceSourceLabel(source: MonthlyResult["balanceSource"]): string {
-	if (source === "override") return t("table.balanceSourceOverride");
-	if (source === "actual") return t("table.balanceSourceActual");
-	return t("table.balanceSourceForecast");
+/** Which rung of the override → actual → forecast hierarchy produced this month's balance. */
+function sourceTag(source: BalanceSource): { label: string; tone: "neutral" | "accent" | "danger" } {
+	if (source === "override") return { label: t("table.tagOverride"), tone: "accent" };
+	if (source === "actual") return { label: t("table.tagActual"), tone: "accent" };
+	return { label: t("table.tagForecast"), tone: "neutral" };
 }
 
 function recurringRowFor(monthResult: MonthlyResult, recurringId: number) {
 	return monthResult.recurringRows.find((r) => r.id === recurringId) ?? null;
+}
+function aggregateActual(month: string) {
+	return planStore.current!.monthlyActuals.find((a) => a.month === month) ?? null;
+}
+function overrideFor(month: string) {
+	return planStore.current!.overrides.find((o) => o.month === month) ?? null;
+}
+
+/** Colored ink for signed figures; plain ink where the sign carries no meaning. */
+function toneClass(value: Money, signed: boolean): string {
+	if (!signed) return "text-ink";
+	if (value.amountMinor < 0) return "text-danger";
+	if (value.amountMinor > 0) return "text-accent";
+	return "text-ink";
 }
 
 function onIncomeActual(month: string, value: Money | null): void {
@@ -45,27 +62,60 @@ function onRecurringActual(recurringId: number, month: string, value: Money | nu
 function onOverride(month: string, value: Money | null): void {
 	upsertOverride(plan.value.id, month, value);
 }
+
+// The table uses border-separate (not collapse) because a collapsed border model renders
+// the sticky first column's edges unreliably while scrolling sideways.
+// The frozen column needs its own right edge — without it the scrolling values slide
+// under the labels with nothing separating them.
+const ROW_HEADER =
+	"sticky left-0 z-20 min-w-[240px] whitespace-nowrap border-b border-r border-hairline px-3 py-2.5 text-left";
+const GROUP_HEADER =
+	"sticky left-0 z-20 border-r border-hairline px-3 pb-1.5 pt-4 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint";
+const DATA_CELL = "min-w-[150px] border-b border-hairline px-3 py-2.5 align-top text-right";
 </script>
 
 <template>
-	<div class="space-y-3">
-		<div v-if="planStore.error" class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-			{{ t(`errors.${planStore.error.code}`) }}
-		</div>
-		<p class="text-xs text-gray-400">{{ t("table.balanceSourceLegend") }}</p>
+	<div class="grid gap-6">
+		<div class="grid gap-6 lg:grid-cols-2">
+			<div class="rounded-card bg-surface p-5 shadow-card">
+				<h3 class="font-display text-[15px] font-bold text-ink">{{ t("charts.incomeExpenseTitle") }}</h3>
+				<p class="mb-1 text-xs text-ink-subtle">{{ t("charts.incomeExpenseSubtitle") }}</p>
+				<IncomeExpenseChart :months="months" :currency="currency" />
+				<div class="mt-1 flex flex-wrap gap-3.5 text-[11px] text-ink-muted">
+					<span class="flex items-center gap-1.5">
+						<span class="inline-block h-2.5 w-2.5 rounded-sm bg-series-income"></span>{{ t("charts.legendIncome") }}
+					</span>
+					<span class="flex items-center gap-1.5">
+						<span class="inline-block h-2.5 w-2.5 rounded-sm bg-series-recurring"></span>{{ t("charts.legendRecurring") }}
+					</span>
+					<span class="flex items-center gap-1.5">
+						<span class="inline-block h-2.5 w-2.5 rounded-sm bg-series-oneTime"></span>{{ t("charts.legendOneTime") }}
+					</span>
+				</div>
+				<p class="mt-1.5 text-[11px] text-ink-faint">{{ t("charts.barsHint") }}</p>
+			</div>
 
-		<div class="overflow-x-auto rounded border border-gray-200">
-			<table class="min-w-full border-collapse text-sm">
+			<div class="rounded-card bg-surface p-5 shadow-card">
+				<h3 class="font-display text-[15px] font-bold text-ink">{{ t("charts.balanceTitle") }}</h3>
+				<p class="mb-1 text-xs text-ink-subtle">{{ t("charts.balanceSubtitle") }}</p>
+				<CumulativeBalanceChart :months="months" />
+			</div>
+		</div>
+
+		<div class="overflow-x-auto rounded-card bg-surface px-5 shadow-card">
+			<table class="min-w-full border-separate border-spacing-0 text-sm">
 				<thead>
-					<tr class="bg-gray-50">
-						<th class="sticky left-0 z-10 min-w-[220px] bg-gray-50 px-3 py-2 text-left font-medium text-gray-600">
+					<tr>
+						<th
+							class="sticky left-0 z-30 min-w-[240px] border-b border-r border-hairline bg-surface px-3 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-subtle"
+						>
 							{{ t("table.month") }}
 						</th>
 						<th
 							v-for="m in months"
 							:key="m.month"
-							class="min-w-[130px] px-3 py-2 text-right font-medium text-gray-600"
-							:class="{ 'bg-red-50 text-red-700': m.flags.negativeMonthlyBalance || m.flags.negativeCumulativeBalance }"
+							class="min-w-[150px] border-b border-hairline bg-surface px-3 py-3.5 text-right font-display text-sm font-bold"
+							:class="m.flags.negativeCumulativeBalance ? 'text-danger' : 'text-ink'"
 						>
 							{{ formatMonthHeader(m.month) }}
 						</th>
@@ -73,143 +123,160 @@ function onOverride(month: string, value: Money | null): void {
 				</thead>
 				<tbody>
 					<!-- Income -->
-					<tr class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal text-gray-700">{{ t("table.income") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2">
-							<div class="mb-1 text-right text-xs text-gray-400"><MoneyCell :value="m.income.forecast" muted /></div>
-							<MoneyInput
-								:model-value="planStore.current!.monthlyActuals.find((a) => a.month === m.month)?.income ?? null"
+					<tr>
+						<th :class="[ROW_HEADER, 'border-b-0 bg-surface font-normal text-ink']">{{ t("table.income") }}</th>
+						<td v-for="m in months" :key="m.month" :class="[DATA_CELL, 'border-b-0']">
+							<ActualCell
+								:value="aggregateActual(m.month)?.income ?? null"
+								:fallback="m.income.forecast"
 								:currency="currency"
-								:placeholder="t('table.actualRow')"
-								@update:model-value="onIncomeActual(m.month, $event)"
+								:add-label="t('table.addActual')"
+								:set-label="t('table.actualDone')"
+								@update="onIncomeActual(m.month, $event)"
 							/>
 						</td>
 					</tr>
 
-					<!-- Recurring expenses, one row per item -->
-					<tr v-for="item in recurringItems" :key="item.id" class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal text-gray-700">{{ item.name }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2">
-							<template v-if="recurringRowFor(m, item.id)">
-								<div class="mb-1 text-right text-xs text-gray-400">
-									<MoneyCell :value="recurringRowFor(m, item.id)!.forecast" muted />
-								</div>
-								<MoneyInput
-									:model-value="recurringRowFor(m, item.id)!.actual"
-									:currency="currency"
-									:placeholder="t('table.actualRow')"
-									@update:model-value="onRecurringActual(item.id, m.month, $event)"
-								/>
-							</template>
-							<span v-else class="text-gray-300">—</span>
-						</td>
+					<!-- Expenses -->
+					<tr>
+						<th :class="[GROUP_HEADER, 'bg-surface']">{{ t("table.groupExpenses") }}</th>
+						<td v-for="m in months" :key="m.month" class="bg-surface"></td>
 					</tr>
-
-					<!-- Recurring total -->
-					<tr class="border-t border-gray-100 bg-gray-50/50">
-						<th class="sticky left-0 z-10 bg-gray-50/50 px-3 py-2 text-left font-normal text-gray-700">{{ t("table.recurringTotal") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2 text-right">
-							<MoneyCell :value="m.recurringTotal.effective" />
-						</td>
-					</tr>
-
-					<!-- One-time expenses -->
-					<tr class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal text-gray-700">{{ t("table.oneTimeTotal") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2">
-							<div class="mb-1 text-right text-xs text-gray-400"><MoneyCell :value="m.oneTimeTotal.forecast" muted /></div>
-							<MoneyInput
-								:model-value="planStore.current!.monthlyActuals.find((a) => a.month === m.month)?.oneTimeExpense ?? null"
+					<tr v-for="item in recurringItems" :key="item.id">
+						<th :class="[ROW_HEADER, 'bg-surface font-normal text-ink']">{{ item.name }}</th>
+						<td v-for="m in months" :key="m.month" :class="DATA_CELL">
+							<ActualCell
+								v-if="recurringRowFor(m, item.id)"
+								:value="recurringRowFor(m, item.id)!.actual"
+								:fallback="recurringRowFor(m, item.id)!.forecast"
 								:currency="currency"
-								:placeholder="t('table.actualRow')"
-								@update:model-value="onOneTimeActual(m.month, $event)"
+								:add-label="t('table.addActual')"
+								:set-label="t('table.actualDone')"
+								@update="onRecurringActual(item.id, m.month, $event)"
+							/>
+							<span v-else class="text-ink-faint" :title="t('table.notApplicable')">—</span>
+						</td>
+					</tr>
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-bold text-ink']">{{ t("table.recurringTotal") }}</th>
+						<td v-for="m in months" :key="m.month" :class="[DATA_CELL, 'font-bold tabular-nums']">
+							{{ formatMoney(m.recurringTotal.effective, "pl-PL") }}
+						</td>
+					</tr>
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-normal text-ink']">{{ t("table.oneTimeTotal") }}</th>
+						<td v-for="m in months" :key="m.month" :class="DATA_CELL">
+							<ActualCell
+								:value="aggregateActual(m.month)?.oneTimeExpense ?? null"
+								:fallback="m.oneTimeTotal.forecast"
+								:currency="currency"
+								:add-label="t('table.addActual')"
+								:set-label="t('table.actualDone')"
+								@update="onOneTimeActual(m.month, $event)"
 							/>
 						</td>
 					</tr>
-
-					<!-- Expenses total -->
-					<tr class="border-t border-gray-100 bg-gray-50/50">
-						<th class="sticky left-0 z-10 bg-gray-50/50 px-3 py-2 text-left font-normal text-gray-700">{{ t("table.expensesTotal") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2 text-right">
-							<MoneyCell :value="m.expensesTotal.effective" />
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-bold text-ink']">{{ t("table.expensesTotal") }}</th>
+						<td v-for="m in months" :key="m.month" :class="[DATA_CELL, 'font-bold tabular-nums']">
+							{{ formatMoney(m.expensesTotal.effective, "pl-PL") }}
 						</td>
 					</tr>
-
-					<!-- Surplus -->
-					<tr class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal text-gray-700">{{ t("table.surplus") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2 text-right">
-							<MoneyCell :value="m.surplus.effective" variant="auto" />
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-bold text-ink']">{{ t("table.surplus") }}</th>
+						<td
+							v-for="m in months"
+							:key="m.month"
+							:class="[DATA_CELL, 'font-bold tabular-nums', toneClass(m.surplus.effective, true)]"
+						>
+							{{ formatMoney(m.surplus.effective, "pl-PL") }}
 						</td>
 					</tr>
 
 					<!-- Investment -->
-					<tr class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal text-gray-700">{{ t("table.investment") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2">
-							<div class="mb-1 text-right text-xs text-gray-400"><MoneyCell :value="m.investment.forecast" muted /></div>
-							<MoneyInput
-								:model-value="planStore.current!.monthlyActuals.find((a) => a.month === m.month)?.investment ?? null"
+					<tr>
+						<th :class="[GROUP_HEADER, 'bg-surface']">{{ t("table.groupInvestment") }}</th>
+						<td v-for="m in months" :key="m.month" class="bg-surface"></td>
+					</tr>
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-normal text-ink']">{{ t("table.investment") }}</th>
+						<td v-for="m in months" :key="m.month" :class="DATA_CELL">
+							<ActualCell
+								:value="aggregateActual(m.month)?.investment ?? null"
+								:fallback="m.investment.forecast"
 								:currency="currency"
-								:placeholder="t('table.actualRow')"
-								@update:model-value="onInvestmentActual(m.month, $event)"
+								:add-label="t('table.addActual')"
+								:set-label="t('table.actualDone')"
+								@update="onInvestmentActual(m.month, $event)"
 							/>
 						</td>
 					</tr>
 
-					<!-- Monthly balance -->
-					<tr class="border-t border-gray-200 bg-gray-50">
-						<th class="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-medium text-gray-800">{{ t("table.monthlyBalance") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2 text-right">
-							<div class="flex items-center justify-end gap-1">
-								<span class="rounded bg-white px-1 text-[10px] text-gray-400" :title="balanceSourceLabel(m.balanceSource)">{{
-									balanceSourceLabel(m.balanceSource)
-								}}</span>
-								<MoneyCell :value="m.monthlyBalance.effective" variant="auto" />
+					<!-- Monthly result -->
+					<tr>
+						<th :class="[GROUP_HEADER, 'bg-surface']">{{ t("table.groupResult") }}</th>
+						<td v-for="m in months" :key="m.month" class="bg-surface"></td>
+					</tr>
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-bold text-ink']">{{ t("table.monthlyBalance") }}</th>
+						<td v-for="m in months" :key="m.month" :class="DATA_CELL">
+							<div class="flex flex-col items-end gap-1.5">
+								<span class="font-bold tabular-nums" :class="toneClass(m.monthlyBalance.effective, true)">
+									{{ formatMoney(m.monthlyBalance.effective, "pl-PL") }}
+								</span>
+								<Tag :tone="sourceTag(m.balanceSource).tone">{{ sourceTag(m.balanceSource).label }}</Tag>
+								<Tag v-if="m.flags.negativeMonthlyBalance" tone="danger" :title="t('table.riskNegativeMonthly')">
+									{{ t("table.tagNegative") }}
+								</Tag>
 							</div>
-							<div v-if="m.flags.negativeMonthlyBalance" class="text-right text-[10px] text-red-600">{{ t("table.riskNegativeMonthly") }}</div>
 						</td>
 					</tr>
-
-					<!-- Manual override -->
-					<tr class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal italic text-gray-700">{{ t("table.override") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2">
-							<MoneyInput
-								:model-value="planStore.current!.overrides.find((o) => o.month === m.month)?.balance ?? null"
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-normal italic text-ink']">{{ t("table.override") }}</th>
+						<td v-for="m in months" :key="m.month" :class="DATA_CELL">
+							<ActualCell
+								:value="overrideFor(m.month)?.balance ?? null"
+								:fallback="m.monthlyBalance.effective"
 								:currency="currency"
-								:placeholder="t('table.clearOverride')"
-								@update:model-value="onOverride(m.month, $event)"
+								:add-label="t('table.setOverride')"
+								:set-label="t('table.overrideSet')"
+								@update="onOverride(m.month, $event)"
 							/>
 						</td>
 					</tr>
-
-					<!-- Cumulative balance -->
-					<tr class="border-t border-gray-200 bg-gray-50">
-						<th class="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-medium text-gray-800">{{ t("table.cumulativeBalance") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2 text-right">
-							<MoneyCell :value="m.cumulativeBalance.effective" variant="auto" />
-							<div v-if="m.flags.negativeCumulativeBalance" class="text-[10px] text-red-600">{{ t("table.riskNegativeCumulative") }}</div>
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-bold text-ink']">{{ t("table.cumulativeBalance") }}</th>
+						<td v-for="m in months" :key="m.month" :class="DATA_CELL">
+							<div class="flex flex-col items-end gap-1.5">
+								<span class="font-bold tabular-nums" :class="toneClass(m.cumulativeBalance.effective, true)">
+									{{ formatMoney(m.cumulativeBalance.effective, "pl-PL") }}
+								</span>
+								<Tag v-if="m.flags.negativeCumulativeBalance" tone="danger" :title="t('table.riskNegativeCumulative')">
+									{{ t("table.tagNegative") }}
+								</Tag>
+							</div>
 						</td>
 					</tr>
-
-					<!-- Cumulative invested -->
-					<tr class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal text-gray-700">{{ t("table.cumulativeInvested") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2 text-right">
-							<MoneyCell :value="m.cumulativeInvested.effective" />
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-bold text-ink']">{{ t("table.cumulativeInvested") }}</th>
+						<td v-for="m in months" :key="m.month" :class="[DATA_CELL, 'font-bold tabular-nums']">
+							{{ formatMoney(m.cumulativeInvested.effective, "pl-PL") }}
 						</td>
 					</tr>
-
-					<!-- Variance on monthly balance -->
-					<tr class="border-t border-gray-100">
-						<th class="sticky left-0 z-10 bg-white px-3 py-2 text-left font-normal text-gray-700">{{ t("table.variance") }}</th>
-						<td v-for="m in months" :key="m.month" class="px-3 py-2 text-right">
-							<MoneyCell :value="m.monthlyBalance.variance" variant="auto" />
+					<tr>
+						<th :class="[ROW_HEADER, 'bg-surface font-bold text-ink']">{{ t("table.variance") }}</th>
+						<td
+							v-for="m in months"
+							:key="m.month"
+							:class="[DATA_CELL, 'font-bold tabular-nums', toneClass(m.monthlyBalance.variance, true)]"
+						>
+							{{ formatMoney(m.monthlyBalance.variance, "pl-PL") }}
 						</td>
 					</tr>
 				</tbody>
 			</table>
 		</div>
+
+		<p class="text-xs text-ink-faint">{{ t("table.totalInvestedInvariantHint") }}</p>
 	</div>
 </template>

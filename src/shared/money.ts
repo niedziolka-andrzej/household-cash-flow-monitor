@@ -124,3 +124,13 @@ export function formatMoney(m: Money, locale: string): string {
 		currency: m.currency,
 	}).format(m.amountMinor / 100);
 }
+
+/**
+ * The locale's short symbol for a currency ("zł" for PLN in pl-PL, "€" for EUR), for
+ * labelling input fields where the number itself is shown unformatted. Falls back to the
+ * ISO code if the locale has no dedicated symbol.
+ */
+export function currencySymbol(currency: string, locale: string): string {
+	const parts = new Intl.NumberFormat(locale, { style: "currency", currency }).formatToParts(0);
+	return parts.find((part) => part.type === "currency")?.value ?? currency;
+}

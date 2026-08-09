@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	addMoney,
 	compareMoney,
+	currencySymbol,
 	CurrencyMismatchError,
 	isNegativeMoney,
 	isZeroMoney,
@@ -69,5 +70,16 @@ describe("parseAmountInput", () => {
 
 	test("rounds to the nearest grosz", () => {
 		expect(parseAmountInput("10,005", "PLN")).toEqual(money(1001, "PLN"));
+	});
+});
+
+describe("currencySymbol", () => {
+	test("returns the locale's short symbol", () => {
+		expect(currencySymbol("PLN", "pl-PL")).toBe("zł");
+		expect(currencySymbol("EUR", "pl-PL")).toBe("€");
+	});
+
+	test("falls back to the ISO code for currencies without a distinct symbol", () => {
+		expect(currencySymbol("CHF", "pl-PL")).toBe("CHF");
 	});
 });

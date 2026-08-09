@@ -19,6 +19,19 @@ export default {
 		plans: "Plany",
 		assumptions: "Założenia",
 		monthlyTable: "Tabela miesięczna",
+		previousPlan: "Poprzedni plan",
+		nextPlan: "Następny plan",
+	},
+
+	charts: {
+		incomeExpenseTitle: "Wpływy i wydatki",
+		incomeExpenseSubtitle: "Co miesiąc: wpływy kontra wydatki stałe + jednorazowe",
+		legendIncome: "Wpływy",
+		legendRecurring: "Wydatki stałe",
+		legendOneTime: "Wydatki jednorazowe",
+		barsHint: "Pełny słupek = prognoza · wąski słupek = wykonanie",
+		balanceTitle: "Saldo skumulowane",
+		balanceSubtitle: "Kreskowana linia = prognoza · pełna linia = wykonanie · pomarańczowe pole = poniżej zera",
 	},
 
 	planList: {
@@ -62,6 +75,11 @@ export default {
 		recurringSection: "Wydatki stałe",
 		oneTimeSection: "Wydatki jednorazowe",
 		investmentSection: "Inwestycje",
+		planCurrency: "Waluta planu:",
+		amountsInCurrency: "Wszystkie kwoty w walucie planu: {currency} ({symbol}).",
+		itemsCount: "{count} pozycji",
+		investmentCoverage: "Zaplanowane wpłaty pokrywają cel",
+		saveInvestment: "Zapisz cel inwestycyjny",
 
 		itemName: "Nazwa",
 		itemDate: "Data",
@@ -69,7 +87,7 @@ export default {
 		monthlyAmount: "Kwota miesięczna",
 		rangeStart: "Miesiąc początkowy",
 		rangeEnd: "Miesiąc końcowy",
-		rangeHint: "Puste pole = cały zakres planu",
+		rangeHint: "Domyślnie zakres pokrywa się z planem — zawęź go tylko, jeśli pozycja obowiązuje krócej.",
 
 		addIncome: "Dodaj wpływ",
 		addRecurring: "Dodaj wydatek stały",
